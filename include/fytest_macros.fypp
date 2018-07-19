@@ -1,49 +1,61 @@
-#:def ASSERT(COND)
-!FYTEST:BEGIN ASSERT(${COND}$)
-  print *, 'ASSERT CALLED'
-  print *, '  COND: ${COND}$'
-  if (${COND}$) then
-    print *, '  COND FULFILLED'
-  else
-    print *, '  COND **NOT** FULFILLED'
-  end if
-!FYTEST:END ASSERT(${COND}$)
-#:enddef ASSERT
+#:def REQUIRE(COND)
+#!
+#! Checks the fulfillment of a given condition.
+#!
+#! If the condition evalutes to .false. the test will be registered as failed and no further code
+#! in that test is executed, except for the optional fixture finalizer. If the condition evaluates
+#! to .true., test execution is continued.
+#!
+#! Args:
+#!     COND: Condition to be fulfilled.
+#!
+
+print *, 'REQUIRE CALLED'
+print *, '  COND: ${COND}$'
+if (${COND}$) then
+  print *, '  COND FULFILLED'
+else
+  print *, '  COND **NOT** FULFILLED'
+end if
+
+#:enddef REQUIRE
 
 
-#:def TEST_CASE(NAME, CODE)
+#:def TEST(NAME, IMPLEMENTATION, fixture='default')
+#!
+#! Defines a test case.
+#!
+#! Args:
+#!     NAME: Name of the test
+#!     IMPLEMENTATION: Test implementation
+#!
 #:mute
-  $:fytest_register_test_case(NAME)
+$:fytest_register_test(NAME, IMPLEMENTATION, fixture)
 #:endmute
-  subroutine ${NAME}$()
-    implicit none
-
-    ${CODE}$
-
-  end subroutine ${NAME}$
-#:enddef TEST_CASE
+#:enddef TEST
 
 
-#:def TEST_MODULE(NAME, HEADER, BODY)
+#!
+#! Defines a test suite.
+#!
+#! Args:
+#!     NAME: Name of the test
+#!     IMPLEMENTATION: Test implementation
+#!
+#:def TEST_SUITE(NAME, SPECIFICATION, IMPLEMENTATION)
 #:mute
-  $:fytest_register_test_module(NAME)
+$:fytest_register_test_suite_name(NAME)
 #:endmute
-module ${NAME}$
-${HEADER}$
-contains
-${BODY}$
-end module ${NAME}$
-
-$:fytest_add_wrapper_module()
-
-#:enddef TEST_MODULE
+$:fytest_generate_test_suite_code(NAME, SPECIFICATION, IMPLEMENTATION)
+#:enddef
 
 
-#:def TEST_PROGRAM(NAME, BODY=None)
-program ${NAME}$
-  $:fytest_import_wrapper_modules()
+#:def TEST_DRIVER()
+program test_driver
 
-  $:fytest_run_tests()
+  $:fytest_driver_import_wrappers()
 
-end program ${NAME}$
-#:enddef TEST_PROGRAM
+  $:fytest_driver_run_tests()
+
+end program test_driver
+#:enddef TEST_DRIVER

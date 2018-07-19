@@ -13,11 +13,11 @@ include make.arch
 	$(FYPP) $(FYPPOPT) $< $@
 
 
-TEST_FACTORIAL_OBJS := factorial.o test_factorial.o fytestlib.o
+TEST_FACTORIAL_OBJS := factorial.o test_factorial.o fytest_lib.o
 test_factorial: test_factorial.o
 	 $(LN) $(LNOPT) -o $@ $(TEST_FACTORIAL_OBJS)
 
-test_factorial.o: factorial.o fytestlib.o
+test_factorial.o: factorial.o fytest_lib.o
 
 .PHONY: clean
 clean:

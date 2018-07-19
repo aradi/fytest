@@ -1,71 +1,167 @@
-#:set fytest_test_modules = []
-#:set fytest_test_cases = []
+#:set fytest_test_module_wrap_prefix = 'fytest_wrap_'
+
+#! Contains the names of the test suites
+#! This is the only global variable which is not resetted in every test suite
+#:set fytest_suite_names = []
+
+#! Test cases in the current test modules
+#! List of TEST_SUITE dicts
+#! TEST_SUITE dicts have following properies:
+#!
+#:set fytest_tests = {}
+#:set fytest_test_names = []
+
+#:set fytest_fixtures = {"default": {"init": None, "final": None, "impl": None, "tests": []}}
 
 
-#:def fytest_register_test_module(NAME)
-  #:global fytest_test_modules
-  $:fytest_test_modules.append(NAME)
-#:enddef fytest_register_test_module
-
-
-#:def fytest_test_module_name(MODULE)
-${MODULE}$
-#:enddef
-
-
-#:def fytest_test_module_wrapper_name(MODULE)
-fytest_wrap_${fytest_test_module_name(MODULE)}$
-#:enddef fytest_test_module_wrapper_name
-
-
-#:def fytest_register_test_case(NAME)
-#:global fytest_test_cases
-#:if NAME in fytest_test_cases
-  #:stop 'Test case ' + NAME + ' has been already defined in the current scope'
-#:endif
-$:fytest_test_cases.append(NAME)
-#:enddef
-
-
-#:def fytest_test_case_name(TESTCASE)
-${TESTCASE}$
-#:enddef
-
-
-#:def fytest_add_wrapper_module()
+#:def fytest_register_test(NAME, IMPLEMENTATION, FIXTURE)
+#!
+#! Registers a test case
+#!
+#! Args:
+#!     NAME: Test case name
+#!     IMPLEMENTATION: Test implementation
+#!
 #:mute
-  #:set MODULE = fytest_test_modules[-1]
-  #:set MODULE_NAME = fytest_test_module_name(MODULE)
-  #:set WRAPPER_NAME = fytest_test_module_wrapper_name(MODULE)
-#:endmute
-module ${WRAPPER_NAME}$
-  use ${MODULE_NAME}$
-  implicit none
-  private
 
-  public :: run_tests_${MODULE_NAME}$
+#:global fytest_tests
+#:global fytest_test_names
+#:global fytest_fixtures
+
+#:if NAME in fytest_tests
+  #:stop "Test " + NAME + " has already been defined"
+#:endif
+
+#:if FIXTURE not in fytest_fixtures
+  #:stop "Fixture " + FIXTURE + " has not been defined yet"
+#:endif
+
+$:fytest_test_names.append(NAME)
+$:fytest_tests.update([(NAME,&
+    & {"implementation": IMPLEMENTATION, "fixture": FIXTURE})])
+$:fytest_fixtures[FIXTURE]["tests"].append(NAME)
+
+#:endmute
+#:enddef fytest_register_test
+
+
+#:def fytest_register_test_suite_name(NAME)
+#!
+#! Registers the name of a test suite
+#!
+#! Args:
+#!     NAME: Name of the test suite.
+#!
+#:mute
+#:global fytest_suite_names
+$:fytest_suite_names.append(NAME)
+#:endmute
+#:enddef
+
+
+#:def fytest_generate_test_suite_code(NAME, SPECIFICATION, IMPLEMENTATIONS)
+#!
+#! Generates the code (subroutine) for a test suite.
+#!
+#! Args:
+#!     NAME: Name of the test suite
+#!     SPECIFICATION: Code containing the specifications
+#!     IMPLEMENTATION: Code containing the implementations
+#!
+#:mute
+#:endmute
+module fytest_suite_${NAME}$
+  use fytest_lib
+${SPECIFICATION}$
+
+  character(*), parameter :: fytest_suite_name = "${NAME}$"
+
+  character(len=31), parameter :: fytest_test_names(${len(fytest_test_names)}$) = [&
+      & character(len=31) ::&
+      & "${'", "'.join(fytest_test_names)}$"&
+      & ]
 
 contains
 
-  subroutine run_tests_${MODULE_NAME}$()
-  #:for TESTCASE in fytest_test_cases
-    call ${TESTCASE}$()
+#:for FIXTURE_NAME, FIXTURE in fytest_fixtures.items()
+  subroutine fytest_fixture_${FIXTURE_NAME}$(testname)
+    character(*), intent(in) :: testname
+
+    select case (testname)
+    #:for TEST_NAME in FIXTURE["tests"]
+    case ("${TEST_NAME}$")
+      call fytest_test_${TEST_NAME}$()
+    #:endfor
+    case default
+      print *, 'ERROR: Invalid test name "${TEST_NAME}$" in fixture "${FIXTURE_NAME}$"'
+    end select
+
+  contains
+
+  #:for TEST_NAME in FIXTURE["tests"]
+
+    subroutine fytest_test_${TEST_NAME}$
+      ${fytest_tests[TEST_NAME]["implementation"]}$
+    end subroutine fytest_test_${TEST_NAME}$
+
   #:endfor
-  end subroutine run_tests_${MODULE_NAME}$
 
-end module ${WRAPPER_NAME}$
-#:enddef fytest_add_wrapper_module
+  end subroutine fytest_fixture_${FIXTURE_NAME}$
 
 
-#:def fytest_import_wrapper_modules()
-  #:for MODULE in fytest_test_modules
-  use ${fytest_test_module_wrapper_name(MODULE)}$
+  subroutine fytest_run_all_${NAME}$()
+
+    integer :: ii
+
+    do ii = 1, size(fytest_test_names)
+      call fytest_run_test_${NAME}$(fytest_test_names(ii))
+    end do
+
+  end subroutine fytest_run_all_${NAME}$
+
+
+  subroutine fytest_run_test_${NAME}$(test_name)
+    character(*), intent(in) :: test_name
+
+    select case (test_name)
+  #:for TEST_NAME in fytest_test_names
+    case ("${TEST_NAME}$")
+      call fytest_fixture_${fytest_tests[TEST_NAME]["fixture"]}$(test_name)
   #:endfor
-#:enddef fytest_import_wrapper_modules
+    case default
+      print '(4A)', 'ERROR: test ', trim(test_name), ' is not defined in test suite ',&
+          & trim(fytest_suite_name)
+    end select
+
+  end subroutine fytest_run_test_${NAME}$
 
 
-#:def fytest_run_tests()
-  #:for MODULE in fytest_test_modules
-  call run_tests_${fytest_test_module_name(MODULE)}$
+#:endfor
+end module fytest_suite_${NAME}$
+
+
+module fytest_suite_wrapper_${NAME}$
+  use fytest_suite_${NAME}$
+  implicit none
+  private
+
+  public :: fytest_run_test_${NAME}$
+  public :: fytest_run_all_${NAME}$
+
+end module fytest_suite_wrapper_${NAME}$
+
+#:enddef fytest_generate_test_suite_code
+
+
+#:def fytest_driver_import_wrappers()
+  #:for SUITE_NAME in fytest_suite_names
+  use fytest_suite_wrapper_${SUITE_NAME}$
   #:endfor
-#:enddef fytest_run_tests
+#:enddef fytest_driver_import_wrappers
+
+
+#:def fytest_driver_run_tests()
+  #:for SUITE_NAME in fytest_suite_names
+  call fytest_run_all_${SUITE_NAME}$()
+  #:endfor
+#:enddef fytest_driver_run_tests
