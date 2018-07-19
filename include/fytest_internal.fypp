@@ -1,27 +1,26 @@
-#:set fytest_test_module_wrap_prefix = 'fytest_wrap_'
-
-#! Contains the names of the test suites
-#! This is the only global variable which is not resetted in every test suite
+#! Names of the known test suites
 #:set fytest_suite_names = []
 
-#! Test cases in the current test modules
-#! List of TEST_SUITE dicts
-#! TEST_SUITE dicts have following properies:
-#!
+#! Dictionary of tests in the current suite
 #:set fytest_tests = {}
+
+#! Ordered list of the test names in the current suite
 #:set fytest_test_names = []
 
-#:set fytest_fixtures = {"default": {"init": None, "final": None, "impl": None, "tests": []}}
+#! Dictionary of fixtures in the current suite
+#:set fytest_fixtures = {"default": {"tests": []}}
+
+#! Parameters of the current fixture
+#:set fytest_fixture_params = {}
 
 
-#:def fytest_register_test(NAME, IMPLEMENTATION, FIXTURE)
-#!
 #! Registers a test case
 #!
 #! Args:
 #!     NAME: Test case name
 #!     IMPLEMENTATION: Test implementation
 #!
+#:def fytest_register_test(NAME, IMPLEMENTATION, FIXTURE)
 #:mute
 
 #:global fytest_tests
@@ -87,6 +86,12 @@ contains
   subroutine fytest_fixture_${FIXTURE_NAME}$(testname)
     character(*), intent(in) :: testname
 
+    ${FIXTURE.get("specification", '')}$
+
+  #:if FIXTURE.get("initializer") is not None
+    call fytest_fixture_initializer()
+  #:endif
+
     select case (testname)
     #:for TEST_NAME in FIXTURE["tests"]
     case ("${TEST_NAME}$")
@@ -96,7 +101,25 @@ contains
       print *, 'ERROR: Invalid test name "${TEST_NAME}$" in fixture "${FIXTURE_NAME}$"'
     end select
 
+  #:if FIXTURE.get("finalizer") is not None
+    call fytest_fixture_finalizer()
+  #:endif
+
   contains
+
+    ${FIXTURE.get("implementation", '')}$
+
+  #:if FIXTURE.get("initializer") is not None
+    subroutine fytest_fixture_initializer()
+      $:FIXTURE["initializer"]
+    end subroutine fytest_fixture_initializer
+  #:endif
+
+  #:if FIXTURE.get("finalizer") is not None
+    subroutine fytest_fixture_finalizer()
+      $:FIXTURE["finalizer"]
+    end subroutine fytest_fixture_finalizer
+  #:endif
 
   #:for TEST_NAME in FIXTURE["tests"]
 
@@ -108,6 +131,7 @@ contains
 
   end subroutine fytest_fixture_${FIXTURE_NAME}$
 
+#:endfor
 
   subroutine fytest_run_all_${NAME}$()
 
@@ -136,7 +160,6 @@ contains
   end subroutine fytest_run_test_${NAME}$
 
 
-#:endfor
 end module fytest_suite_${NAME}$
 
 
@@ -165,3 +188,37 @@ end module fytest_suite_wrapper_${NAME}$
   call fytest_run_all_${SUITE_NAME}$()
   #:endfor
 #:enddef fytest_driver_run_tests
+
+
+#:def fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION)
+#:global fytest_fixtures
+$:fytest_fixtures.update([(NAME, {&
+    & "initializer": fytest_fixture_params.get("initializer"),&
+    & "finalizer": fytest_fixture_params.get("finalizer"),&
+    & "specification": SPECIFICATION,&
+    & "implementation": IMPLEMENTATION,&
+    & "tests": []&
+    & })])
+#:enddef fytest_register_fixture
+
+
+#:def fytest_register_test_initializer(IMPLEMENTATION)
+#:mute
+#:global fytest_fixture_params
+#:if fytest_fixture_params.get("initializer") is not None
+  #:stop "Double specification of test initializer"
+#:endif
+$:fytest_fixture_params.update([("initializer", IMPLEMENTATION)])
+#:endmute
+#:enddef fytest_register_test_initializer
+
+
+#:def fytest_register_test_finalizer(IMPLEMENTATION)
+#:mute
+#:global fytest_fixture_params
+#:if fytest_fixture_params.get("finalizer") is not None
+  #:stop "Double specification of test initializer"
+#:endif
+$:fytest_fixture_params.update([("finalizer", IMPLEMENTATION)])
+#:endmute
+#:enddef fytest_register_test_finalizer

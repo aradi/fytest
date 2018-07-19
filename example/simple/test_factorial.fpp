@@ -18,32 +18,40 @@
   #:endblock TEST
 
 
-#!  #:block TEST_FIXTURE('special_cases')
-#!
-#!    integer :: special_result
-#!
-#!  #:contains
-#!
-#!    #:block TEST_INITIALIZER
-#!      special_result = 1
-#!      print *, 'TEST_INITIALIZER'
-#!    #:endblock TEST_INITIALIZER
-#!
-#!    #:block TEST_FINALIZER
-#!      print *, "TEST_FINALIZER"
-#!    #:endblock TEST_FINALIZER
-#!
-#!  #:endblock TEST_FIXTURE
-#!
-#!
-#!  #:block TEST('factorial_special_1', fixture='special_cases')
-#!      @:ASSERT(factorial(special_value) == special_result)
-#!  #:endblock TEST
-#!
-#!
-#!  #:block TEST('factorial_special_0', fixture='special_cases')
-#!      @:ASSERT(factorial(0) == special_result)
-#!  #:endblock TEST
+  #:block TEST_FIXTURE('special_cases')
+
+    integer :: special_result
+
+  #:contains
+
+    subroutine initializer_helper()
+      special_result = 1
+      print *, 'TEST_INITIALIZER'
+    end subroutine initializer_helper
+
+    #:block TEST_INITIALIZER
+      call initializer_helper()
+    #:endblock TEST_INITIALIZER
+
+    #:block TEST_FINALIZER
+      call finalizer_helper()
+    #:endblock TEST_FINALIZER
+
+    subroutine finalizer_helper()
+      print *, "TEST_FINALIZER"
+    end subroutine finalizer_helper
+
+  #:endblock TEST_FIXTURE
+
+
+  #:block TEST('factorial_special_1', FIXTURE='special_cases')
+    @:REQUIRE(factorial(special_value) == special_result)
+  #:endblock TEST
+
+
+  #:block TEST('factorial_special_0', FIXTURE='special_cases')
+    @:REQUIRE(factorial(0) == special_result)
+  #:endblock TEST
 
 
 #:endblock TEST_SUITE

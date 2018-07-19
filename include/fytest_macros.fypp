@@ -21,7 +21,7 @@ end if
 #:enddef REQUIRE
 
 
-#:def TEST(NAME, IMPLEMENTATION, fixture='default')
+#:def TEST(NAME, IMPLEMENTATION, FIXTURE='default')
 #!
 #! Defines a test case.
 #!
@@ -30,7 +30,7 @@ end if
 #!     IMPLEMENTATION: Test implementation
 #!
 #:mute
-$:fytest_register_test(NAME, IMPLEMENTATION, fixture)
+$:fytest_register_test(NAME, IMPLEMENTATION, FIXTURE)
 #:endmute
 #:enddef TEST
 
@@ -59,3 +59,19 @@ program test_driver
 
 end program test_driver
 #:enddef TEST_DRIVER
+
+
+
+#:def TEST_FIXTURE(NAME, SPECIFICATION, IMPLEMENTATION)
+$:fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION)
+#:enddef TEST_FIXTURE
+
+
+#:def TEST_INITIALIZER(IMPLEMENTATION)
+$:fytest_register_test_initializer(IMPLEMENTATION)
+#:enddef TEST_INITIALIZER
+
+
+#:def TEST_FINALIZER(IMPLEMENTATION)
+$:fytest_register_test_finalizer(IMPLEMENTATION)
+#:enddef TEST_FINALIZER
