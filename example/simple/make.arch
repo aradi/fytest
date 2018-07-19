@@ -1,0 +1,14 @@
+FXX := gfortran
+FXXOPT :=
+
+FYPP := fypp
+FYPPOPT :=
+
+LN := $(FXX)
+LNOPT :=
+
+FYTEST_ROOT := ../..
+FYTEST_INCS := -I$(FYTEST_ROOT)/include
+FYPPOPT += $(FYTEST_INCS)
+
+.PRECIOUS: %.f90

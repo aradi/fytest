@@ -1,0 +1,6 @@
+#:def TEST_LIBRARY()
+module fytest_lib
+  implicit none
+
+end module fytest_lib
+#:enddef TEST_LIBRARY

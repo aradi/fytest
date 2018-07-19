@@ -1,0 +1,49 @@
+#:def ASSERT(COND)
+!FYTEST:BEGIN ASSERT(${COND}$)
+  print *, 'ASSERT CALLED'
+  print *, '  COND: ${COND}$'
+  if (${COND}$) then
+    print *, '  COND FULFILLED'
+  else
+    print *, '  COND **NOT** FULFILLED'
+  end if
+!FYTEST:END ASSERT(${COND}$)
+#:enddef ASSERT
+
+
+#:def TEST_CASE(NAME, CODE)
+#:mute
+  $:fytest_register_test_case(NAME)
+#:endmute
+  subroutine ${NAME}$()
+    implicit none
+
+    ${CODE}$
+
+  end subroutine ${NAME}$
+#:enddef TEST_CASE
+
+
+#:def TEST_MODULE(NAME, HEADER, BODY)
+#:mute
+  $:fytest_register_test_module(NAME)
+#:endmute
+module ${NAME}$
+${HEADER}$
+contains
+${BODY}$
+end module ${NAME}$
+
+$:fytest_add_wrapper_module()
+
+#:enddef TEST_MODULE
+
+
+#:def TEST_PROGRAM(NAME, BODY=None)
+program ${NAME}$
+  $:fytest_import_wrapper_modules()
+
+  $:fytest_run_tests()
+
+end program ${NAME}$
+#:enddef TEST_PROGRAM

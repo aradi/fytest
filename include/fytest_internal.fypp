@@ -1,0 +1,71 @@
+#:set fytest_test_modules = []
+#:set fytest_test_cases = []
+
+
+#:def fytest_register_test_module(NAME)
+  #:global fytest_test_modules
+  $:fytest_test_modules.append(NAME)
+#:enddef fytest_register_test_module
+
+
+#:def fytest_test_module_name(MODULE)
+${MODULE}$
+#:enddef
+
+
+#:def fytest_test_module_wrapper_name(MODULE)
+fytest_wrap_${fytest_test_module_name(MODULE)}$
+#:enddef fytest_test_module_wrapper_name
+
+
+#:def fytest_register_test_case(NAME)
+#:global fytest_test_cases
+#:if NAME in fytest_test_cases
+  #:stop 'Test case ' + NAME + ' has been already defined in the current scope'
+#:endif
+$:fytest_test_cases.append(NAME)
+#:enddef
+
+
+#:def fytest_test_case_name(TESTCASE)
+${TESTCASE}$
+#:enddef
+
+
+#:def fytest_add_wrapper_module()
+#:mute
+  #:set MODULE = fytest_test_modules[-1]
+  #:set MODULE_NAME = fytest_test_module_name(MODULE)
+  #:set WRAPPER_NAME = fytest_test_module_wrapper_name(MODULE)
+#:endmute
+module ${WRAPPER_NAME}$
+  use ${MODULE_NAME}$
+  implicit none
+  private
+
+  public :: run_tests_${MODULE_NAME}$
+
+contains
+
+  subroutine run_tests_${MODULE_NAME}$()
+  #:for TESTCASE in fytest_test_cases
+    call ${TESTCASE}$()
+  #:endfor
+  end subroutine run_tests_${MODULE_NAME}$
+
+end module ${WRAPPER_NAME}$
+#:enddef fytest_add_wrapper_module
+
+
+#:def fytest_import_wrapper_modules()
+  #:for MODULE in fytest_test_modules
+  use ${fytest_test_module_wrapper_name(MODULE)}$
+  #:endfor
+#:enddef fytest_import_wrapper_modules
+
+
+#:def fytest_run_tests()
+  #:for MODULE in fytest_test_modules
+  call run_tests_${fytest_test_module_name(MODULE)}$
+  #:endfor
+#:enddef fytest_run_tests
