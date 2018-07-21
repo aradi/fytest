@@ -86,7 +86,19 @@ contains
   subroutine fytest_fixture_${FIXTURE_NAME}$(testname)
     character(*), intent(in) :: testname
 
+ #:set FIXTURE_PARAMETERS = FIXTURE.get("parameters")
+ #:set FIXTURE_PARAMETERS = [] if FIXTURE_PARAMETERS is None else FIXTURE_PARAMETERS
+ #:for IPARAM in range(len(FIXTURE_PARAMETERS))
+   integer :: fytest_iter${IPARAM}$
+ #:endfor
+
     ${FIXTURE.get("specification", '')}$
+
+  #:for IPARAM, FIXTURE_PARAM in enumerate(FIXTURE_PARAMETERS)
+    #:set ITERATOR, ARRAY = FIXTURE_PARAM
+    do fytest_iter${IPARAM}$ = 1, size(${ARRAY}$)
+      ${ITERATOR}$ = ${ARRAY}$(fytest_iter${IPARAM}$)
+  #:endfor
 
   #:if FIXTURE.get("initializer") is not None
     call fytest_fixture_initializer()
@@ -104,6 +116,11 @@ contains
   #:if FIXTURE.get("finalizer") is not None
     call fytest_fixture_finalizer()
   #:endif
+
+  #:for _ in range(len(FIXTURE_PARAMETERS))
+    end do
+  #:endfor
+
 
   contains
 
@@ -190,13 +207,14 @@ end module fytest_suite_wrapper_${NAME}$
 #:enddef fytest_driver_run_tests
 
 
-#:def fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION)
+#:def fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS)
 #:global fytest_fixtures
 $:fytest_fixtures.update([(NAME, {&
     & "initializer": fytest_fixture_params.get("initializer"),&
     & "finalizer": fytest_fixture_params.get("finalizer"),&
     & "specification": SPECIFICATION,&
     & "implementation": IMPLEMENTATION,&
+    & "parameters": PARAMETERS,&
     & "tests": []&
     & })])
 #:enddef fytest_register_fixture

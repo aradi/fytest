@@ -18,15 +18,18 @@
   #:endblock TEST
 
 
-  #:block TEST_FIXTURE('special_cases')
+  #:block TEST_FIXTURE('special_cases',&
+      & PARAMETERS=[('param1', 'paramarray'), ('param2', 'paramarray')])
 
+    integer :: param1, param2
+    integer, parameter :: paramarray(3) = [9, -4, 3]
     integer :: special_result
 
   #:contains
 
     subroutine initializer_helper()
       special_result = 1
-      print *, 'TEST_INITIALIZER'
+      print *, 'TEST_INITIALIZER, param1, param2:', param1, param2
     end subroutine initializer_helper
 
     #:block TEST_INITIALIZER
