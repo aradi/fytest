@@ -4,9 +4,20 @@
   use factorial_module
   implicit none
 
-  integer :: special_value = 1
+  integer :: special_value = 5
 
 #:contains
+
+  #:block TEST_SUITE_INITIALIZER
+    print *, 'TEST SUITE INITIALIZER'
+    special_value = 1
+  #:endblock TEST_SUITE_INITIALIZER
+
+
+  #:block TEST_SUITE_FINALIZER
+    print *, 'SUITE is over'
+  #:endblock TEST_SUITE_FINALIZER
+
 
   #:block TEST('factorial_5')
     @:REQUIRE(factorial(5) == 120)

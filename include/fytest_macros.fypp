@@ -44,7 +44,7 @@ $:fytest_register_test(NAME, IMPLEMENTATION, FIXTURE)
 #!
 #:def TEST_SUITE(NAME, SPECIFICATION, IMPLEMENTATION)
 #:mute
-$:fytest_register_test_suite_name(NAME)
+$:fytest_register_test_suite(NAME)
 #:endmute
 $:fytest_generate_test_suite_code(NAME, SPECIFICATION, IMPLEMENTATION)
 #:enddef
@@ -55,7 +55,11 @@ program test_driver
 
   $:fytest_driver_import_wrappers()
 
+  $:fytest_driver_run_initializers()
+
   $:fytest_driver_run_tests()
+
+  $:fytest_driver_run_finalizers()
 
 end program test_driver
 #:enddef TEST_DRIVER
@@ -75,3 +79,13 @@ $:fytest_register_test_initializer(IMPLEMENTATION)
 #:def TEST_FINALIZER(IMPLEMENTATION)
 $:fytest_register_test_finalizer(IMPLEMENTATION)
 #:enddef TEST_FINALIZER
+
+
+#:def TEST_SUITE_INITIALIZER(IMPLEMENTATION)
+$:fytest_register_test_suite_initializer(IMPLEMENTATION)
+#:enddef TEST_SUITE_INITIALIZER
+
+
+#:def TEST_SUITE_FINALIZER(IMPLEMENTATION)
+$:fytest_register_test_suite_finalizer(IMPLEMENTATION)
+#:enddef TEST_SUITE_FINALIZER

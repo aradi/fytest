@@ -1,6 +1,12 @@
 #! Names of the known test suites
 #:set fytest_suite_names = []
 
+#! Dictionary of test suites
+#:set fytest_suites = {}
+
+#! Parameters of the current test suite
+#:set fytest_suite_params = {}
+
 #! Dictionary of tests in the current suite
 #:set fytest_tests = {}
 
@@ -44,7 +50,7 @@ $:fytest_fixtures[FIXTURE]["tests"].append(NAME)
 #:enddef fytest_register_test
 
 
-#:def fytest_register_test_suite_name(NAME)
+#:def fytest_register_test_suite(NAME)
 #!
 #! Registers the name of a test suite
 #!
@@ -54,6 +60,8 @@ $:fytest_fixtures[FIXTURE]["tests"].append(NAME)
 #:mute
 #:global fytest_suite_names
 $:fytest_suite_names.append(NAME)
+$:fytest_suites.update([(NAME, {"initializer": fytest_suite_params.get("initializer"),&
+    & "finalizer": fytest_suite_params.get("finalizer")})])
 #:endmute
 #:enddef
 
@@ -81,6 +89,15 @@ ${SPECIFICATION}$
       & ]
 
 contains
+
+  subroutine fytest_suite_initializer_${NAME}$()
+    ${fytest_suites[NAME].get("initializer")}$
+  end subroutine fytest_suite_initializer_${NAME}$
+
+
+  subroutine fytest_suite_finalizer_${NAME}$()
+    ${fytest_suites[NAME].get("finalizer")}$
+  end subroutine fytest_suite_finalizer_${NAME}$
 
 #:for FIXTURE_NAME, FIXTURE in fytest_fixtures.items()
   subroutine fytest_fixture_${FIXTURE_NAME}$(testname)
@@ -187,6 +204,8 @@ module fytest_suite_wrapper_${NAME}$
 
   public :: fytest_run_test_${NAME}$
   public :: fytest_run_all_${NAME}$
+  public :: fytest_suite_initializer_${NAME}$
+  public :: fytest_suite_finalizer_${NAME}$
 
 end module fytest_suite_wrapper_${NAME}$
 
@@ -200,11 +219,25 @@ end module fytest_suite_wrapper_${NAME}$
 #:enddef fytest_driver_import_wrappers
 
 
+#:def fytest_driver_run_initializers()
+  #:for SUITE_NAME in fytest_suite_names
+    call fytest_suite_initializer_${SUITE_NAME}$()
+  #:endfor
+#:enddef fytest_driver_run_initializers
+
+
 #:def fytest_driver_run_tests()
   #:for SUITE_NAME in fytest_suite_names
   call fytest_run_all_${SUITE_NAME}$()
   #:endfor
 #:enddef fytest_driver_run_tests
+
+
+#:def fytest_driver_run_finalizers()
+  #:for SUITE_NAME in fytest_suite_names
+    call fytest_suite_finalizer_${SUITE_NAME}$()
+  #:endfor
+#:enddef fytest_driver_run_finalizers
 
 
 #:def fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS)
@@ -240,3 +273,25 @@ $:fytest_fixture_params.update([("initializer", IMPLEMENTATION)])
 $:fytest_fixture_params.update([("finalizer", IMPLEMENTATION)])
 #:endmute
 #:enddef fytest_register_test_finalizer
+
+
+#:def fytest_register_test_suite_initializer(IMPLEMENTATION)
+#:mute
+#:global fytest_suite_params
+#:if fytest_suite_params.get("initializer") is not None
+  #:stop "Double specification of test suite initializer"
+#:endif
+$:fytest_suite_params.update([("initializer", IMPLEMENTATION)])
+#:endmute
+#:enddef fytest_register_test_suite_initializer
+
+
+#:def fytest_register_test_suite_finalizer(IMPLEMENTATION)
+#:mute
+#:global fytest_suite_params
+#:if fytest_suite_params.get("finalizer") is not None
+  #:stop "Double specification of test suite finalizer"
+#:endif
+$:fytest_suite_params.update([("finalizer", IMPLEMENTATION)])
+#:endmute
+#:enddef fytest_register_test_suite_finalizer
