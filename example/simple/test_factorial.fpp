@@ -43,13 +43,13 @@
       print *, 'TEST_INITIALIZER, param1, param2:', param1, param2
     end subroutine initializer_helper
 
-    #:block TEST_INITIALIZER
+    #:block TEST_FIXTURE_INITIALIZER
       call initializer_helper()
-    #:endblock TEST_INITIALIZER
+    #:endblock TEST_FIXTURE_INITIALIZER
 
-    #:block TEST_FINALIZER
+    #:block TEST_FIXTURE_FINALIZER
       call finalizer_helper()
-    #:endblock TEST_FINALIZER
+    #:endblock TEST_FIXTURE_FINALIZER
 
     subroutine finalizer_helper()
       print *, "TEST_FINALIZER"

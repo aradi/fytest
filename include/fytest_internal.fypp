@@ -1,23 +1,20 @@
 #! Names of the known test suites
 #:set fytest_suite_names = []
 
-#! Dictionary of test suites
-#:set fytest_suites = {}
+#! The current test suite
+#:set fytest_current_suite = {}
 
-#! Parameters of the current test suite
-#:set fytest_suite_params = {}
-
-#! Dictionary of tests in the current suite
+#! Tests in the current suite
 #:set fytest_tests = {}
 
-#! Ordered list of the test names in the current suite
+#! Names of the test names in the current suite
 #:set fytest_test_names = []
 
-#! Dictionary of fixtures in the current suite
+#! Fixtures in the current suite
 #:set fytest_fixtures = {"default": {"tests": []}}
 
-#! Parameters of the current fixture
-#:set fytest_fixture_params = {}
+#! Current fixture
+#:set fytest_current_fixture = {}
 
 
 #! Registers a test case
@@ -43,43 +40,131 @@
 
 $:fytest_test_names.append(NAME)
 $:fytest_tests.update([(NAME,&
-    & {"implementation": IMPLEMENTATION, "fixture": FIXTURE})])
+    & {"implementation": IMPLEMENTATION.strip(), "fixture": FIXTURE})])
 $:fytest_fixtures[FIXTURE]["tests"].append(NAME)
 
 #:endmute
 #:enddef fytest_register_test
 
 
-#:def fytest_register_test_suite(NAME)
+#! Registers a test fixture
 #!
+#! Args:
+#!     NAME: Name of the fixture
+#!     SPECIFICATION: Specificiation of the fixture
+#!     IMPLEMENTATION: Implementation of the fixture
+#!     PARAMETERS: Parameters to make parameterized tests.
+#!
+#:def fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS)
+#:mute
+#:global fytest_fixtures
+#:global fytest_current_fixture
+$:fytest_fixtures.update([(NAME, {&
+    & "initializer": fytest_current_fixture.get("initializer"),&
+    & "finalizer": fytest_current_fixture.get("finalizer"),&
+    & "specification": SPECIFICATION.strip(),&
+    & "implementation": IMPLEMENTATION.strip(),&
+    & "parameters": PARAMETERS,&
+    & "tests": []&
+    & })])
+#:set fytest_current_fixture = {}
+#:endmute
+#:enddef fytest_register_fixture
+
+
+#! Registers a test fixture initializer
+#!
+#! Args:
+#!     IMPLEMENTATION: implementation part of the test fixture finalizer
+#!
+#:def fytest_register_test_fixture_initializer(IMPLEMENTATION)
+#:mute
+#:global fytest_current_fixture
+#:if fytest_current_fixture.get("initializer") is not None
+  #:stop "Double specification of test initializer"
+#:endif
+$:fytest_current_fixture.update([("initializer", IMPLEMENTATION)])
+#:endmute
+#:enddef fytest_register_test_fixture_initializer
+
+
+#! Registers a test fixture finalizer
+#!
+#! Args:
+#!     IMPLEMENTATION: implementation part of the test fixture finalizer
+#!
+#:def fytest_register_test_fixture_finalizer(IMPLEMENTATION)
+#:mute
+#:global fytest_current_fixture
+#:if fytest_current_fixture.get("finalizer") is not None
+  #:stop "Double specification of test initializer"
+#:endif
+$:fytest_current_fixture.update([("finalizer", IMPLEMENTATION.strip())])
+#:endmute
+#:enddef fytest_register_test_fixture_finalizer
+
+
 #! Registers the name of a test suite
 #!
 #! Args:
 #!     NAME: Name of the test suite.
 #!
+#:def fytest_register_test_suite(NAME)
 #:mute
 #:global fytest_suite_names
 $:fytest_suite_names.append(NAME)
-$:fytest_suites.update([(NAME, {"initializer": fytest_suite_params.get("initializer"),&
-    & "finalizer": fytest_suite_params.get("finalizer")})])
 #:endmute
 #:enddef
 
 
-#:def fytest_generate_test_suite_code(NAME, SPECIFICATION, IMPLEMENTATIONS)
+#! Registers a test suite initializer
 #!
-#! Generates the code (subroutine) for a test suite.
+#! Args:
+#!     IMPLEMENTATION: implementation part of the test suite initializer
+#!
+#:def fytest_register_test_suite_initializer(IMPLEMENTATION)
+#:mute
+#:global fytest_current_suite
+#:if fytest_current_suite.get("initializer") is not None
+  #:stop "Double specification of test suite initializer"
+#:endif
+$:fytest_current_suite.update([("initializer", IMPLEMENTATION.strip())])
+#:endmute
+#:enddef fytest_register_test_suite_initializer
+
+
+#! Registers a test suite finalizer
+#!
+#! Args:
+#!     IMPLEMENTATION: implementation part of the test suite finalizer
+#!
+#:def fytest_register_test_suite_finalizer(IMPLEMENTATION)
+#:mute
+#:global fytest_current_suite
+#:if fytest_current_suite.get("finalizer") is not None
+  #:stop "Double specification of test suite finalizer"
+#:endif
+$:fytest_current_suite.update([("finalizer", IMPLEMENTATION.strip())])
+#:endmute
+#:enddef fytest_register_test_suite_finalizer
+
+
+#! Generates the code for a test suite (module).
 #!
 #! Args:
 #!     NAME: Name of the test suite
 #!     SPECIFICATION: Code containing the specifications
 #!     IMPLEMENTATION: Code containing the implementations
 #!
+#:def fytest_render_test_suite(NAME, SPECIFICATION, IMPLEMENTATION)
 #:mute
 #:endmute
+!
+! Test suite module ${NAME}$
+!
 module fytest_suite_${NAME}$
   use fytest_lib
-${SPECIFICATION}$
+  $:SPECIFICATION.strip()
 
   character(*), parameter :: fytest_suite_name = "${NAME}$"
 
@@ -90,13 +175,15 @@ ${SPECIFICATION}$
 
 contains
 
+  $:IMPLEMENTATION.strip()
+
   subroutine fytest_suite_initializer_${NAME}$()
-    ${fytest_suites[NAME].get("initializer")}$
+    ${fytest_current_suite.get("initializer")}$
   end subroutine fytest_suite_initializer_${NAME}$
 
 
   subroutine fytest_suite_finalizer_${NAME}$()
-    ${fytest_suites[NAME].get("finalizer")}$
+    ${fytest_current_suite.get("finalizer")}$
   end subroutine fytest_suite_finalizer_${NAME}$
 
 #:for FIXTURE_NAME, FIXTURE in fytest_fixtures.items()
@@ -109,7 +196,7 @@ contains
    integer :: fytest_iter${IPARAM}$
  #:endfor
 
-    ${FIXTURE.get("specification", '')}$
+  $:FIXTURE.get("specification", '')
 
   #:for IPARAM, FIXTURE_PARAM in enumerate(FIXTURE_PARAMETERS)
     #:set ITERATOR, ARRAY = FIXTURE_PARAM
@@ -141,7 +228,7 @@ contains
 
   contains
 
-    ${FIXTURE.get("implementation", '')}$
+  $:FIXTURE.get("implementation", '')
 
   #:if FIXTURE.get("initializer") is not None
     subroutine fytest_fixture_initializer()
@@ -157,7 +244,7 @@ contains
 
   #:for TEST_NAME in FIXTURE["tests"]
 
-    subroutine fytest_test_${TEST_NAME}$
+    subroutine fytest_test_${TEST_NAME}$()
       ${fytest_tests[TEST_NAME]["implementation"]}$
     end subroutine fytest_test_${TEST_NAME}$
 
@@ -193,10 +280,12 @@ contains
 
   end subroutine fytest_run_test_${NAME}$
 
-
 end module fytest_suite_${NAME}$
 
 
+!
+! Test suite wrapper module ${NAME}$
+!
 module fytest_suite_wrapper_${NAME}$
   use fytest_suite_${NAME}$
   implicit none
@@ -209,89 +298,57 @@ module fytest_suite_wrapper_${NAME}$
 
 end module fytest_suite_wrapper_${NAME}$
 
-#:enddef fytest_generate_test_suite_code
+#:enddef fytest_render_test_suite
 
 
-#:def fytest_driver_import_wrappers()
-  #:for SUITE_NAME in fytest_suite_names
+#! Resets the current test suite
+#!
+#! Should be called after the test suite has been rendered.
+#!
+#:def fytest_reset_current_test_suite()
+#:mute
+#:global fytest_current_suite
+#:set fytest_current_suite = {}
+#:endmute
+#:enddef
+
+
+#! Renders test driver
+#!
+#:def fytest_render_test_driver()
+program test_driver
+
+#:for SUITE_NAME in fytest_suite_names
   use fytest_suite_wrapper_${SUITE_NAME}$
-  #:endfor
-#:enddef fytest_driver_import_wrappers
+#:endfor
 
+#:for SUITE_NAME in fytest_suite_names
+  call fytest_suite_initializer_${SUITE_NAME}$()
+#:endfor
 
-#:def fytest_driver_run_initializers()
-  #:for SUITE_NAME in fytest_suite_names
-    call fytest_suite_initializer_${SUITE_NAME}$()
-  #:endfor
-#:enddef fytest_driver_run_initializers
-
-
-#:def fytest_driver_run_tests()
-  #:for SUITE_NAME in fytest_suite_names
+#:for SUITE_NAME in fytest_suite_names
   call fytest_run_all_${SUITE_NAME}$()
-  #:endfor
-#:enddef fytest_driver_run_tests
+#:endfor
+
+#:for SUITE_NAME in fytest_suite_names
+  call fytest_suite_finalizer_${SUITE_NAME}$()
+#:endfor
+
+end program test_driver
+#:enddef fytest_render_test_driver
 
 
-#:def fytest_driver_run_finalizers()
-  #:for SUITE_NAME in fytest_suite_names
-    call fytest_suite_finalizer_${SUITE_NAME}$()
-  #:endfor
-#:enddef fytest_driver_run_finalizers
-
-
-#:def fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS)
-#:global fytest_fixtures
-$:fytest_fixtures.update([(NAME, {&
-    & "initializer": fytest_fixture_params.get("initializer"),&
-    & "finalizer": fytest_fixture_params.get("finalizer"),&
-    & "specification": SPECIFICATION,&
-    & "implementation": IMPLEMENTATION,&
-    & "parameters": PARAMETERS,&
-    & "tests": []&
-    & })])
-#:enddef fytest_register_fixture
-
-
-#:def fytest_register_test_initializer(IMPLEMENTATION)
-#:mute
-#:global fytest_fixture_params
-#:if fytest_fixture_params.get("initializer") is not None
-  #:stop "Double specification of test initializer"
-#:endif
-$:fytest_fixture_params.update([("initializer", IMPLEMENTATION)])
-#:endmute
-#:enddef fytest_register_test_initializer
-
-
-#:def fytest_register_test_finalizer(IMPLEMENTATION)
-#:mute
-#:global fytest_fixture_params
-#:if fytest_fixture_params.get("finalizer") is not None
-  #:stop "Double specification of test initializer"
-#:endif
-$:fytest_fixture_params.update([("finalizer", IMPLEMENTATION)])
-#:endmute
-#:enddef fytest_register_test_finalizer
-
-
-#:def fytest_register_test_suite_initializer(IMPLEMENTATION)
-#:mute
-#:global fytest_suite_params
-#:if fytest_suite_params.get("initializer") is not None
-  #:stop "Double specification of test suite initializer"
-#:endif
-$:fytest_suite_params.update([("initializer", IMPLEMENTATION)])
-#:endmute
-#:enddef fytest_register_test_suite_initializer
-
-
-#:def fytest_register_test_suite_finalizer(IMPLEMENTATION)
-#:mute
-#:global fytest_suite_params
-#:if fytest_suite_params.get("finalizer") is not None
-  #:stop "Double specification of test suite finalizer"
-#:endif
-$:fytest_suite_params.update([("finalizer", IMPLEMENTATION)])
-#:endmute
-#:enddef fytest_register_test_suite_finalizer
+#! Renders the code for the REQUIRE macro
+#!
+#! Args:
+#!     COND: Condition in the REQUIRE macro.
+#!
+#:def fytest_render_require(COND)
+print *, 'REQUIRE CALLED'
+print *, '  COND: ${COND}$'
+if (${COND}$) then
+  print *, '  COND FULFILLED'
+else
+  print *, '  COND **NOT** FULFILLED'
+end if
+#:enddef

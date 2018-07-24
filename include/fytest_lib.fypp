@@ -1,6 +1,8 @@
-#:def TEST_LIBRARY()
+#! Renders the test backend library
+#!
+#:fytest_render_test_library()
 module fytest_lib
   implicit none
 
 end module fytest_lib
-#:enddef TEST_LIBRARY
+#:enddef fytest_render_test_library

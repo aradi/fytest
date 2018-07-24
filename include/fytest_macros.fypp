@@ -1,5 +1,3 @@
-#:def REQUIRE(COND)
-#!
 #! Checks the fulfillment of a given condition.
 #!
 #! If the condition evalutes to .false. the test will be registered as failed and no further code
@@ -9,83 +7,109 @@
 #! Args:
 #!     COND: Condition to be fulfilled.
 #!
-
-print *, 'REQUIRE CALLED'
-print *, '  COND: ${COND}$'
-if (${COND}$) then
-  print *, '  COND FULFILLED'
-else
-  print *, '  COND **NOT** FULFILLED'
-end if
-
+#:def REQUIRE(COND)
+$:fytest_render_require(COND)
 #:enddef REQUIRE
 
 
-#:def TEST(NAME, IMPLEMENTATION, FIXTURE='default')
-#!
 #! Defines a test case.
 #!
 #! Args:
 #!     NAME: Name of the test
 #!     IMPLEMENTATION: Test implementation
+#!     FIXTURE: Optional test fixture
 #!
+#:def TEST(NAME, IMPLEMENTATION, FIXTURE='default')
 #:mute
 $:fytest_register_test(NAME, IMPLEMENTATION, FIXTURE)
 #:endmute
 #:enddef TEST
 
 
-#!
 #! Defines a test suite.
 #!
 #! Args:
 #!     NAME: Name of the test
+#!     SPECIFICATION: Specification  part of the test suite
 #!     IMPLEMENTATION: Test implementation
 #!
 #:def TEST_SUITE(NAME, SPECIFICATION, IMPLEMENTATION)
 #:mute
 $:fytest_register_test_suite(NAME)
 #:endmute
-$:fytest_generate_test_suite_code(NAME, SPECIFICATION, IMPLEMENTATION)
+$:fytest_render_test_suite(NAME, SPECIFICATION, IMPLEMENTATION)
+#:mute
+$:fytest_reset_current_test_suite()
+#:endmute
 #:enddef
 
 
+#! Generates driver code for the test suites.
+#!
+#! Note: It can only drive those test suites which were generated in the same file.
+#!
 #:def TEST_DRIVER()
-program test_driver
-
-  $:fytest_driver_import_wrappers()
-
-  $:fytest_driver_run_initializers()
-
-  $:fytest_driver_run_tests()
-
-  $:fytest_driver_run_finalizers()
-
-end program test_driver
+$:fytest_render_test_driver()
 #:enddef TEST_DRIVER
 
 
-
+#! Defines a test fixture.
+#!
+#! Args:
+#!    NAME: Name of the test fixture
+#!    SPECIFICATION: Specification part of the fixture
+#!    IMPLEMENTATION: Implementation part of the fixture
+#!    PARAMETERS: Optional list of (parameter_name, parameter_array) tuples, where
+#!        parameter_name is the name of the iterator variable and parameter_array is
+#!        the array it will iterate over.
+#!
 #:def TEST_FIXTURE(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS=None)
 $:fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS)
 #:enddef TEST_FIXTURE
 
 
-#:def TEST_INITIALIZER(IMPLEMENTATION)
-$:fytest_register_test_initializer(IMPLEMENTATION)
-#:enddef TEST_INITIALIZER
+#! Defines a test fixture initializer.
+#!
+#! Args:
+#!     IMPLEMENTATION: Test fixture initializer implementation
+#!
+#:def TEST_FIXTURE_INITIALIZER(IMPLEMENTATION)
+$:fytest_register_test_fixture_initializer(IMPLEMENTATION)
+#:enddef TEST_FIXTURE_INITIALIZER
 
 
-#:def TEST_FINALIZER(IMPLEMENTATION)
-$:fytest_register_test_finalizer(IMPLEMENTATION)
-#:enddef TEST_FINALIZER
+#! Defines a test fixture finalizer.
+#!
+#! Args:
+#!     IMPLEMENTATION: Test fixture finalizer implementation
+#!
+#:def TEST_FIXTURE_FINALIZER(IMPLEMENTATION)
+$:fytest_register_test_fixture_finalizer(IMPLEMENTATION)
+#:enddef TEST_FIXTURE_FINALIZER
 
 
+#! Defines a test suite initializer.
+#!
+#! Args:
+#!     IMPLEMENTATION: Test suite initializer implementation
+#!
 #:def TEST_SUITE_INITIALIZER(IMPLEMENTATION)
 $:fytest_register_test_suite_initializer(IMPLEMENTATION)
 #:enddef TEST_SUITE_INITIALIZER
 
 
+#! Defines a test suite finalizer.
+#!
+#! Args:
+#!     IMPLEMENTATION: Test suite finalizer implementation
+#!
 #:def TEST_SUITE_FINALIZER(IMPLEMENTATION)
 $:fytest_register_test_suite_finalizer(IMPLEMENTATION)
 #:enddef TEST_SUITE_FINALIZER
+
+
+#! Renders the backend library needed for FyTest.
+#!
+#:def TEST_LIBRARY()
+$:fytest_render_test_library()
+#:enddef TEST_LIBRARY
