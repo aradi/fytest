@@ -1,5 +1,5 @@
 FXX := gfortran
-FXXOPT := -Wall -pedantic
+FXXOPT := -Wall -pedantic -fmax-errors=1 -fbounds-check
 
 FYPP := fypp
 FYPPOPT :=

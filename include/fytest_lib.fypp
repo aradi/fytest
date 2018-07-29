@@ -17,7 +17,7 @@ module fytest_lib
   type :: fytest_TestResult
     integer :: testStatus
     character(:), allocatable :: errorMsg
-    integer :: errorLine
+    integer :: line
   end type fytest_TestResult
 
 
@@ -51,33 +51,98 @@ module fytest_lib
   end type fytest_SuiteParams
 
 
+  type :: fytest_TestContainer
+    character(:), allocatable :: fileName, suiteName, fixtureName, testName
+    integer, allocatable :: testParams(:)
+    procedure(fytest_TestRunnerIface), pointer, nopass :: testRunner => null()
+  end type fytest_TestContainer
+
+
 contains
 
-  subroutine fytest_runTests(suites)
-    type(fytest_SuiteParams), allocatable, intent(inout) :: suites(:)
+  subroutine fytest_TestContainer_initialize(this, suite, fixture, iTest, iParamTest)
+    type(fytest_TestContainer), intent(out) :: this
+    type(fytest_SuiteParams), intent(in) :: suite
+    type(fytest_FixtureParams), intent(in) :: fixture
+    integer, intent(in) :: iTest
+    integer, intent(in) :: iParamTest
 
-    integer, parameter :: noParams(0) = [integer :: ]
-    integer :: nSuites, iSuite, iFixture, iTest, nParamTests, iParamTest
+    this%fileName = suite%fileName
+    this%suiteName = suite%name
+    this%fixtureName = fixture%name
+    this%testName = fixture%tests(iTest)%str
+    this%testRunner => fixture%testRunner
+    if (iParamTest > 0) then
+      this%testParams = fytest_getParams(iParamTest, fixture%paramBounds)
+    else
+      this%testParams = [integer ::]
+    end if
+
+  end subroutine fytest_TestContainer_initialize
+
+
+  subroutine fytest_getFlatTestArray(suites, testContainers)
+    type(fytest_SuiteParams), intent(in) :: suites(:)
+    type(fytest_TestContainer), allocatable, intent(out) :: testContainers(:)
+
+    integer :: nSuites, iSuite, iFixture, iTest, nParamTests, iParam, ind
     integer, allocatable :: params(:)
+    integer :: nAllTests
 
-    nSuites = size(suites)
-    do iSuite = 1, nSuites
+    nAllTests = 0
+    do iSuite = 1, size(suites)
       associate (suite => suites(iSuite))
         do iFixture = 1, size(suite%fixtures)
           associate (fixture => suite%fixtures(iFixture))
             do iTest = 1, size(fixture%tests)
               if (size(fixture%paramBounds) > 0) then
                 nParamTests = product(fixture%paramBounds(2, :) - fixture%paramBounds(1, :) + 1)
-                do iParamTest = 1, nParamTests
-                  params = fytest_getParams(iParamTest, fixture%paramBounds)
-                  call fixture%testRunner(fixture%tests(iTest)%str, params)
+              else
+                nParamTests = 1
+              end if
+              nAllTests = nAllTests + nParamTests
+            end do
+          end associate
+        end do
+      end associate
+    end do
+
+    allocate(testContainers(nAllTests))
+
+    ind = 1
+    do iSuite = 1, size(suites)
+      associate (suite => suites(iSuite))
+        do iFixture = 1, size(suite%fixtures)
+          associate (fixture => suite%fixtures(iFixture))
+            do iTest = 1, size(fixture%tests)
+              if (size(fixture%paramBounds) > 0) then
+                nParamTests = product(fixture%paramBounds(2, :) - fixture%paramBounds(1, :) + 1)
+                do iParam = 1, nParamTests
+                  call fytest_TestContainer_initialize(testContainers(ind), suite, fixture,&
+                      & iTest, iParam)
+                  ind = ind + 1
                 end do
               else
-                call fixture%testRunner(fixture%tests(iTest)%str, noParams)
+                call fytest_TestContainer_initialize(testContainers(ind), suite, fixture, iTest, 0)
+                ind = ind + 1
               end if
             end do
           end associate
         end do
+      end associate
+    end do
+
+  end subroutine fytest_getFlatTestArray
+
+
+  subroutine fytest_runTests(testContainers)
+    type(fytest_TestContainer), intent(in) :: testContainers(:)
+
+    integer :: iTest
+
+    do iTest = 1, size(testContainers)
+      associate (test => testContainers(iTest))
+        call test%testRunner(test%testName, test%testParams)
       end associate
     end do
 

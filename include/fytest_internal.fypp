@@ -352,10 +352,12 @@ program fytest_test_driver
   implicit none
 
   type(fytest_SuiteParams), allocatable :: fytest_suites(:)
+  type(fytest_TestContainer), allocatable :: fytest_testContainers(:)
 
   call fytest_initializeAllSuites()
-  call fytest_getSuites(fytest_suites)
-  call fytest_runTests(fytest_suites)
+  call fytest_getSuiteInfos(fytest_suites)
+  call fytest_getFlatTestArray(fytest_suites, fytest_testContainers)
+  call fytest_runTests(fytest_testContainers)
   call fytest_finalizeAllSuites()
 
 contains
@@ -374,7 +376,7 @@ contains
     end subroutine fytest_finalizeAllSuites
 
 
-  subroutine fytest_getSuites(suites)
+  subroutine fytest_getSuiteInfos(suites)
     type(fytest_SuiteParams), allocatable, intent(out) :: suites(:)
 
     allocate(suites(${len(fytest_suite_names)}$))
@@ -382,7 +384,7 @@ contains
       call fytest_getSuite_${SUITE_NAME}$(suites(${IND + 1}$))
     #:endfor
 
-    end subroutine fytest_getSuites
+    end subroutine fytest_getSuiteInfos
 
 end program fytest_test_driver
 #:enddef fytest_render_test_driver
