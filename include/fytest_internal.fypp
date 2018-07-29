@@ -166,119 +166,148 @@ module fytest_suite_${NAME}$
   use fytest_lib
   $:SPECIFICATION.strip()
 
-  character(*), parameter :: fytest_suite_name = "${NAME}$"
-
-  character(len=31), parameter :: fytest_test_names(${len(fytest_test_names)}$) = [&
-      & character(len=31) ::&
-      & "${'", "'.join(fytest_test_names)}$"&
-      & ]
 
 contains
 
   $:IMPLEMENTATION.strip()
 
-  subroutine fytest_suite_initializer_${NAME}$()
+
+  subroutine fytest_getSuite_${NAME}$(suite)
+    type(fytest_SuiteParams), intent(out) :: suite
+
+    suite%name = "${NAME}$"
+    suite%fileName = "${_FILE_}$"
+    allocate(suite%fixtures(${len(fytest_fixtures)}$))
+    #:for FIXTURE_IND, FIXTURE_NAME in enumerate(fytest_fixtures)
+      call fytest_getFixture_${FIXTURE_NAME}$(suite%fixtures(${FIXTURE_IND + 1}$))
+    #:endfor
+
+  end subroutine fytest_getSuite_${NAME}$
+
+
+  subroutine fytest_initializeSuite_${NAME}$()
     ${fytest_current_suite.get("initializer")}$
-  end subroutine fytest_suite_initializer_${NAME}$
+  end subroutine fytest_initializeSuite_${NAME}$
 
 
-  subroutine fytest_suite_finalizer_${NAME}$()
+  subroutine fytest_finalizeSuite_${NAME}$()
     ${fytest_current_suite.get("finalizer")}$
-  end subroutine fytest_suite_finalizer_${NAME}$
+  end subroutine fytest_finalizeSuite_${NAME}$
+
+
+  #:for FIXTURE_NAME, FIXTURE in fytest_fixtures.items()
+    subroutine fytest_getFixture_${FIXTURE_NAME}$(fixture)
+      type(fytest_FixtureParams), intent(out) :: fixture
+
+      $:FIXTURE.get("specification", '')
+      call getFixture(fixture)
+
+    contains
+
+      subroutine getFixture(fixture)
+        type(fytest_FixtureParams), intent(out) :: fixture
+
+        fixture%name = "${FIXTURE_NAME}$"
+        allocate(fixture%tests(${len(FIXTURE["tests"])}$))
+        #:for TEST_IND, TEST in enumerate(FIXTURE["tests"])
+          fixture%tests(${TEST_IND + 1}$)%str = "${TEST}$"
+        #:endfor
+        #:set FIXTURE_PARAMETERS = FIXTURE.get("parameters")
+        #:set FIXTURE_PARAMETERS = [] if FIXTURE_PARAMETERS is None else FIXTURE_PARAMETERS
+        allocate(fixture%paramBounds(2, ${len(FIXTURE_PARAMETERS)}$))
+        #:for IPARAM, FIXTURE_PARAM in enumerate(FIXTURE_PARAMETERS)
+          fixture%paramBounds(1, ${IPARAM + 1}$) = lbound(${FIXTURE_PARAM[1]}$, dim=1)
+          fixture%paramBounds(2, ${IPARAM + 1}$) = ubound(${FIXTURE_PARAM[1]}$, dim=1)
+        #:endfor
+        fixture%testRunner => fytest_runFixturedTest_${FIXTURE_NAME}$
+
+      end subroutine getFixture
+
+    end subroutine fytest_getFixture_${FIXTURE_NAME}$
+  #:endfor
+
 
 #:for FIXTURE_NAME, FIXTURE in fytest_fixtures.items()
-  subroutine fytest_fixture_${FIXTURE_NAME}$(testname)
+  subroutine fytest_runFixturedTest_${FIXTURE_NAME}$(testname, testparams)
     character(*), intent(in) :: testname
+    integer, intent(in) :: testparams(:)
 
- #:set FIXTURE_PARAMETERS = FIXTURE.get("parameters")
- #:set FIXTURE_PARAMETERS = [] if FIXTURE_PARAMETERS is None else FIXTURE_PARAMETERS
- #:for IPARAM in range(len(FIXTURE_PARAMETERS))
-   integer :: fytest_iter${IPARAM}$
- #:endfor
-
-  $:FIXTURE.get("specification", '')
-
-  #:for IPARAM, FIXTURE_PARAM in enumerate(FIXTURE_PARAMETERS)
-    #:set ITERATOR, ARRAY = FIXTURE_PARAM
-    do fytest_iter${IPARAM}$ = 1, size(${ARRAY}$)
-      ${ITERATOR}$ = ${ARRAY}$(fytest_iter${IPARAM}$)
-  #:endfor
-
-  #:if FIXTURE.get("initializer") is not None
-    call fytest_fixture_initializer()
-  #:endif
-
-    select case (testname)
-    #:for TEST_NAME in FIXTURE["tests"]
-    case ("${TEST_NAME}$")
-      call fytest_test_${TEST_NAME}$()
-    #:endfor
-    case default
-      print *, 'ERROR: Invalid test name "${TEST_NAME}$" in fixture "${FIXTURE_NAME}$"'
-    end select
-
-  #:if FIXTURE.get("finalizer") is not None
-    call fytest_fixture_finalizer()
-  #:endif
-
-  #:for _ in range(len(FIXTURE_PARAMETERS))
-    end do
-  #:endfor
-
+    $:FIXTURE.get("specification", '')
+    call fytest_setUpParams(testparams)
+    call fytest_runTest(testname)
 
   contains
 
-  $:FIXTURE.get("implementation", '')
+    $:FIXTURE.get("implementation", '')
 
-  #:if FIXTURE.get("initializer") is not None
-    subroutine fytest_fixture_initializer()
-      $:FIXTURE["initializer"]
-    end subroutine fytest_fixture_initializer
-  #:endif
+    subroutine fytest_setUpParams(testParams)
+      integer, intent(in) :: testParams(:)
 
-  #:if FIXTURE.get("finalizer") is not None
-    subroutine fytest_fixture_finalizer()
-      $:FIXTURE["finalizer"]
-    end subroutine fytest_fixture_finalizer
-  #:endif
+      #:set FIXTURE_PARAMETERS = FIXTURE.get("parameters")
+      #:set FIXTURE_PARAMETERS = [] if FIXTURE_PARAMETERS is None else FIXTURE_PARAMETERS
+      if (size(testParams) /= ${len(FIXTURE_PARAMETERS)}$) then
+        print *, "Internal error: invalid test parameter array size"
+        stop
+      end if
+      #:for IPARAM, FIXTURE_PARAM in enumerate(FIXTURE_PARAMETERS)
+        #:set ITERATOR, ARRAY = FIXTURE_PARAM
+        ${ITERATOR}$ = ${ARRAY}$(testParams(${IPARAM + 1}$))
+      #:endfor
 
-  #:for TEST_NAME in FIXTURE["tests"]
+    end subroutine fytest_setUpParams
 
-    subroutine fytest_test_${TEST_NAME}$()
-      ${fytest_tests[TEST_NAME]["implementation"]}$
-    end subroutine fytest_test_${TEST_NAME}$
 
-  #:endfor
+    subroutine fytest_runTest(testname)
+      character(*), intent(in) :: testname
 
-  end subroutine fytest_fixture_${FIXTURE_NAME}$
+      #:if FIXTURE.get("initializer") is not None
+        call fytest_initializeFixture()
+      #:endif
+
+      select case (testname)
+      #:for TEST_NAME in FIXTURE["tests"]
+        case ("${TEST_NAME}$")
+          call fytest_runTest_${TEST_NAME}$()
+      #:endfor
+      case default
+        print *, 'ERROR: Invalid test name "${TEST_NAME}$" in suite "${NAME}$", fixture&
+            & "${FIXTURE_NAME}$"'
+        stop
+      end select
+
+      #:if FIXTURE.get("finalizer") is not None
+        call fytest_finalizeFixture()
+      #:endif
+
+    end subroutine fytest_runTest
+
+
+    #:if FIXTURE.get("initializer") is not None
+      subroutine fytest_initializeFixture()
+        $:FIXTURE["initializer"]
+      end subroutine fytest_initializeFixture
+    #:endif
+
+
+    #:if FIXTURE.get("finalizer") is not None
+      subroutine fytest_finalizeFixture()
+        $:FIXTURE["finalizer"]
+      end subroutine fytest_finalizeFixture
+    #:endif
+
+
+    #:for TEST_NAME in FIXTURE["tests"]
+
+      subroutine fytest_runTest_${TEST_NAME}$()
+        ${fytest_tests[TEST_NAME]["implementation"]}$
+      end subroutine fytest_runTest_${TEST_NAME}$
+
+    #:endfor
+
+  end subroutine fytest_runFixturedTest_${FIXTURE_NAME}$
 
 #:endfor
 
-  subroutine fytest_run_all_${NAME}$()
-
-    integer :: ii
-
-    do ii = 1, size(fytest_test_names)
-      call fytest_run_test_${NAME}$(fytest_test_names(ii))
-    end do
-
-  end subroutine fytest_run_all_${NAME}$
-
-
-  subroutine fytest_run_test_${NAME}$(test_name)
-    character(*), intent(in) :: test_name
-
-    select case (test_name)
-  #:for TEST_NAME in fytest_test_names
-    case ("${TEST_NAME}$")
-      call fytest_fixture_${fytest_tests[TEST_NAME]["fixture"]}$(test_name)
-  #:endfor
-    case default
-      print '(4A)', 'ERROR: test ', trim(test_name), ' is not defined in test suite ',&
-          & trim(fytest_suite_name)
-    end select
-
-  end subroutine fytest_run_test_${NAME}$
 
 end module fytest_suite_${NAME}$
 
@@ -291,10 +320,9 @@ module fytest_suite_wrapper_${NAME}$
   implicit none
   private
 
-  public :: fytest_run_test_${NAME}$
-  public :: fytest_run_all_${NAME}$
-  public :: fytest_suite_initializer_${NAME}$
-  public :: fytest_suite_finalizer_${NAME}$
+  public :: fytest_initializeSuite_${NAME}$
+  public :: fytest_finalizeSuite_${NAME}$
+  public :: fytest_getSuite_${NAME}$
 
 end module fytest_suite_wrapper_${NAME}$
 
@@ -316,25 +344,47 @@ end module fytest_suite_wrapper_${NAME}$
 #! Renders test driver
 #!
 #:def fytest_render_test_driver()
-program test_driver
+program fytest_test_driver
+  use fytest_lib
+  #:for SUITE_NAME in fytest_suite_names
+    use fytest_suite_wrapper_${SUITE_NAME}$
+  #:endfor
+  implicit none
 
-#:for SUITE_NAME in fytest_suite_names
-  use fytest_suite_wrapper_${SUITE_NAME}$
-#:endfor
+  type(fytest_SuiteParams), allocatable :: fytest_suites(:)
 
-#:for SUITE_NAME in fytest_suite_names
-  call fytest_suite_initializer_${SUITE_NAME}$()
-#:endfor
+  call fytest_initializeAllSuites()
+  call fytest_getSuites(fytest_suites)
+  call fytest_runTests(fytest_suites)
+  call fytest_finalizeAllSuites()
 
-#:for SUITE_NAME in fytest_suite_names
-  call fytest_run_all_${SUITE_NAME}$()
-#:endfor
+contains
 
-#:for SUITE_NAME in fytest_suite_names
-  call fytest_suite_finalizer_${SUITE_NAME}$()
-#:endfor
+  subroutine fytest_initializeAllSuites()
+    #:for SUITE_NAME in fytest_suite_names
+      call fytest_initializeSuite_${SUITE_NAME}$()
+    #:endfor
+    end subroutine fytest_initializeAllSuites
 
-end program test_driver
+
+  subroutine fytest_finalizeAllSuites()
+    #:for SUITE_NAME in fytest_suite_names
+      call fytest_finalizeSuite_${SUITE_NAME}$()
+    #:endfor
+    end subroutine fytest_finalizeAllSuites
+
+
+  subroutine fytest_getSuites(suites)
+    type(fytest_SuiteParams), allocatable, intent(out) :: suites(:)
+
+    allocate(suites(${len(fytest_suite_names)}$))
+    #:for IND, SUITE_NAME in enumerate(fytest_suite_names)
+      call fytest_getSuite_${SUITE_NAME}$(suites(${IND + 1}$))
+    #:endfor
+
+    end subroutine fytest_getSuites
+
+end program fytest_test_driver
 #:enddef fytest_render_test_driver
 
 

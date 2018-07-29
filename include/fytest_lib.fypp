@@ -1,8 +1,110 @@
 #! Renders the test backend library
 #!
-#:fytest_render_test_library()
+#:def fytest_render_test_library()
 module fytest_lib
   implicit none
+
+  type :: fytest_TestStatusHelper
+    integer :: testNotRun = -1
+    integer :: testSucceded = 0
+    integer :: testSkipped = 1
+    integer :: testFailed = 2
+  end type fytest_TestStatusHelper
+
+  type(fytest_TestStatusHelper), parameter :: fytest_TestStatus = fytest_TestStatusHelper()
+
+
+  type :: fytest_TestResult
+    integer :: testStatus
+    character(:), allocatable :: errorMsg
+    integer :: errorLine
+  end type fytest_TestResult
+
+
+  abstract interface
+    subroutine fytest_TestRunnerIface(testName, testParams)
+      import :: fytest_TestResult
+      character(*), intent(in) :: testName
+      integer, intent(in) :: testParams(:)
+      !type(fytest_TestResult), intent(out) :: testResult
+    end subroutine fytest_TestRunnerIface
+  end interface
+
+
+  type :: fytest_VarChar
+    character(:), allocatable :: str
+  end type fytest_VarChar
+
+
+  type :: fytest_FixtureParams
+    character(:), allocatable :: name
+    type(fytest_VarChar), allocatable :: tests(:)
+    integer, allocatable :: paramBounds(:,:)
+    procedure(fytest_TestRunnerIface), pointer, nopass :: testRunner => null()
+  end type fytest_FixtureParams
+
+
+  type :: fytest_SuiteParams
+    character(:), allocatable :: name
+    character(:), allocatable :: fileName
+    type(fytest_FixtureParams), allocatable :: fixtures(:)
+  end type fytest_SuiteParams
+
+
+contains
+
+  subroutine fytest_runTests(suites)
+    type(fytest_SuiteParams), allocatable, intent(inout) :: suites(:)
+
+    integer, parameter :: noParams(0) = [integer :: ]
+    integer :: nSuites, iSuite, iFixture, iTest, nParamTests, iParamTest
+    integer, allocatable :: params(:)
+
+    nSuites = size(suites)
+    do iSuite = 1, nSuites
+      associate (suite => suites(iSuite))
+        do iFixture = 1, size(suite%fixtures)
+          associate (fixture => suite%fixtures(iFixture))
+            do iTest = 1, size(fixture%tests)
+              if (size(fixture%paramBounds) > 0) then
+                nParamTests = product(fixture%paramBounds(2, :) - fixture%paramBounds(1, :) + 1)
+                do iParamTest = 1, nParamTests
+                  params = fytest_getParams(iParamTest, fixture%paramBounds)
+                  call fixture%testRunner(fixture%tests(iTest)%str, params)
+                end do
+              else
+                call fixture%testRunner(fixture%tests(iTest)%str, noParams)
+              end if
+            end do
+          end associate
+        end do
+      end associate
+    end do
+
+  end subroutine fytest_runTests
+
+
+  function fytest_getParams(ind, paramBounds) result(params)
+    integer, intent(in) :: ind
+    integer, intent(in) :: paramBounds(:,:)
+    integer :: params(size(paramBounds, dim=2))
+
+    integer :: nParams(size(paramBounds, dim=2))
+    integer :: ind0, divisor, iParam
+
+    nParams(:) = paramBounds(2, :) - paramBounds(1, :) + 1
+    ind0 = ind - 1
+    divisor = product(nParams)
+    do iParam = size(paramBounds, dim=2), 2, -1
+      divisor = divisor / nParams(iParam)
+      params(iParam) = ind0 / divisor
+      ind0 = ind0 - divisor * params(iParam)
+    end do
+    params(1) = ind0
+    params(:) = params + 1
+
+  end function fytest_getParams
+
 
 end module fytest_lib
 #:enddef fytest_render_test_library
