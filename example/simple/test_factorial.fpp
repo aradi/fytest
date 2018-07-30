@@ -1,6 +1,6 @@
 #:include 'fytest.fypp'
 
-#:block TEST_SUITE('test_factorial')
+#:block TEST_SUITE('factorial')
   use factorial_module
   implicit none
 
@@ -9,22 +9,21 @@
 #:contains
 
   #:block TEST_SUITE_INITIALIZER
-    print *, 'TEST SUITE INITIALIZER'
     special_value = 1
   #:endblock TEST_SUITE_INITIALIZER
 
 
   #:block TEST_SUITE_FINALIZER
-    print *, 'SUITE is over'
+    continue
   #:endblock TEST_SUITE_FINALIZER
 
 
-  #:block TEST('factorial_5')
+  #:block TEST('5')
     @:REQUIRE(factorial(5) == 120)
   #:endblock TEST
 
 
-  #:block TEST('factorial_1')
+  #:block TEST('1')
     @:REQUIRE(factorial(1) == 0)
   #:endblock TEST
 
@@ -40,7 +39,6 @@
 
     subroutine initializer_helper()
       special_result = 1
-      print *, 'TEST_INITIALIZER, param1, param2:', param1, param2
     end subroutine initializer_helper
 
     #:block TEST_FIXTURE_INITIALIZER
@@ -52,7 +50,7 @@
     #:endblock TEST_FIXTURE_FINALIZER
 
     subroutine finalizer_helper()
-      print *, "TEST_FINALIZER"
+      continue
     end subroutine finalizer_helper
 
   #:endblock TEST_FIXTURE

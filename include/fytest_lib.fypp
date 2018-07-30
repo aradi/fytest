@@ -2,31 +2,34 @@
 #!
 #:def fytest_render_test_library()
 module fytest_lib
+  use, intrinsic :: iso_fortran_env
   implicit none
 
+
   type :: fytest_TestStatusHelper
-    integer :: testNotRun = -1
-    integer :: testSucceded = 0
-    integer :: testSkipped = 1
+    integer :: testSucceded = 1
     integer :: testFailed = 2
+    integer :: testSkipped = 3
   end type fytest_TestStatusHelper
 
   type(fytest_TestStatusHelper), parameter :: fytest_TestStatus = fytest_TestStatusHelper()
 
+  character(10), parameter :: statusChars(3) = [character(10) :: "Success", "FAILED", "Skipped"]
+
 
   type :: fytest_TestResult
-    integer :: testStatus
+    integer :: testStatus = fytest_TestStatus%testFailed
     character(:), allocatable :: errorMsg
     integer :: line
   end type fytest_TestResult
 
 
   abstract interface
-    subroutine fytest_TestRunnerIface(testName, testParams)
+    subroutine fytest_TestRunnerIface(testName, testParams, testResult)
       import :: fytest_TestResult
       character(*), intent(in) :: testName
       integer, intent(in) :: testParams(:)
-      !type(fytest_TestResult), intent(out) :: testResult
+      type(fytest_TestResult), intent(out) :: testResult
     end subroutine fytest_TestRunnerIface
   end interface
 
@@ -55,7 +58,30 @@ module fytest_lib
     character(:), allocatable :: fileName, suiteName, fixtureName, testName
     integer, allocatable :: testParams(:)
     procedure(fytest_TestRunnerIface), pointer, nopass :: testRunner => null()
+    type(fytest_TestResult) :: testResult
   end type fytest_TestContainer
+
+
+  type :: fytest_TestLogger
+    integer :: fdOut = output_unit
+  contains
+    procedure :: logTestRun => fytest_TestLogger_logTestRun
+    procedure :: logTestResult => fytest_TestLogger_logTestResult
+    procedure :: logFailedTest => fytest_TestLogger_logFailedTest
+    procedure :: logStatus => fytest_TestLogger_logStatus
+    procedure :: logTestStatistics => fytest_TestLogger_logTestStatistics
+  end type fytest_TestLogger
+
+
+  type :: fytest_Timer
+    integer :: startCount, endCount, countRate
+    real :: startTime, endTime
+  contains
+    procedure :: start => fytest_Timer_start
+    procedure :: stop => fytest_Timer_stop
+    procedure :: getCpuTime => fytest_Timer_getCpuTime
+    procedure :: getWallClockTime => fytest_Timer_getWallClockTime
+  end type fytest_Timer
 
 
 contains
@@ -85,8 +111,7 @@ contains
     type(fytest_SuiteParams), intent(in) :: suites(:)
     type(fytest_TestContainer), allocatable, intent(out) :: testContainers(:)
 
-    integer :: nSuites, iSuite, iFixture, iTest, nParamTests, iParam, ind
-    integer, allocatable :: params(:)
+    integer :: iSuite, iFixture, iTest, nParamTests, iParam, ind
     integer :: nAllTests
 
     nAllTests = 0
@@ -135,18 +160,42 @@ contains
   end subroutine fytest_getFlatTestArray
 
 
-  subroutine fytest_runTests(testContainers)
-    type(fytest_TestContainer), intent(in) :: testContainers(:)
+  subroutine fytest_runTests(testContainers, logger)
+    type(fytest_TestContainer), intent(inout) :: testContainers(:)
+    type(fytest_TestLogger), intent(in) :: logger
 
     integer :: iTest
 
     do iTest = 1, size(testContainers)
-      associate (test => testContainers(iTest))
-        call test%testRunner(test%testName, test%testParams)
-      end associate
+      call logger%logTestRun(testContainers(iTest))
+      call testContainers(iTest)%testRunner(testContainers(iTest)%testName,&
+          & testContainers(iTest)%testParams, testContainers(iTest)%testResult)
+      call logger%logTestResult(testContainers(iTest))
     end do
 
   end subroutine fytest_runTests
+
+
+  subroutine fytest_generateFinalReport(testContainers, logger, timer)
+    type(fytest_TestContainer), intent(in) :: testContainers(:)
+    type(fytest_TestLogger), intent(in) :: logger
+    type(fytest_Timer), intent(in) :: timer
+
+    integer :: totals(3)
+    integer :: iTest
+
+    totals(:) = 0
+    do iTest = 1, size(testContainers)
+      associate (test => testContainers(iTest))
+        totals(test%testResult%testStatus) = totals(test%testResult%testStatus) + 1
+        if (test%testResult%testStatus == fytest_TestStatus%testFailed) then
+          call logger%logFailedTest(test)
+        end if
+      end associate
+    end do
+    call logger%logTestStatistics(totals, timer)
+
+  end subroutine fytest_generateFinalReport
 
 
   function fytest_getParams(ind, paramBounds) result(params)
@@ -169,6 +218,150 @@ contains
     params(:) = params + 1
 
   end function fytest_getParams
+
+
+  function fytest_getTestParamStr(testParams) result(paramStr)
+    integer, intent(in) :: testParams(:)
+    character(100) :: paramStr
+
+    character(100) :: formatStr
+
+    if (size(testParams) == 1) then
+      write(paramStr, "(I0)") testParams(1)
+    else
+      write(formatStr, "(A,I0,A)") "(", size(testParams) - 1, "(I0,', '),I0)"
+      write(paramStr, formatStr) testParams
+    end if
+
+  end function fytest_getTestParamStr
+
+
+  subroutine fytest_TestLogger_logStatus(this, status, msg)
+    class(fytest_TestLogger), intent(in) :: this
+    character(*), intent(in) :: status
+    character(*), intent(in) :: msg
+
+    write(this%fdOut, "('[ ', A, T11, ' ] ', A)") trim(status), trim(msg)
+
+  end subroutine fytest_TestLogger_logStatus
+
+
+  subroutine fytest_TestLogger_logTestRun(this, test)
+    class(fytest_TestLogger), intent(in) :: this
+    type(fytest_TestContainer), intent(in) :: test
+
+    call this%logStatus('Running',&
+        & trim(fytest_getFullTestName(test%suiteName, test%testName, test%testParams)))
+
+  end subroutine fytest_TestLogger_logTestRun
+
+
+  subroutine fytest_TestLogger_logTestResult(this, test)
+    class(fytest_TestLogger), intent(in) :: this
+    type(fytest_TestContainer), intent(in) :: test
+
+    call this%logStatus(trim(statusChars(test%testResult%testStatus)),&
+        & trim(fytest_getFullTestName(test%suiteName, test%testName, test%testParams)))
+
+  end subroutine fytest_TestLogger_logTestResult
+
+
+  subroutine fytest_TestLogger_logFailedTest(this, test)
+    class(fytest_TestLogger), intent(in) :: this
+    type(fytest_TestContainer), intent(in) :: test
+
+    write(this%fdOut, "(/, A, 1X, T20, A)") 'FAILING TEST:',&
+        & trim(fytest_getFullTestName(test%suiteName, test%testName, test%testParams))
+    write(this%fdOut, "(A, T20, 2A, I0)") 'Failed at: ', test%fileName, ':', test%testResult%line
+    write(this%fdOut, "(A, T20, A)") 'Failing condition: ', test%testResult%errorMsg
+
+  end subroutine fytest_TestLogger_logFailedTest
+
+
+
+  subroutine fytest_TestLogger_logTestStatistics(this, totals, timer)
+    class(fytest_TestLogger), intent(in) :: this
+    integer, intent(in) :: totals(:)
+    class(fytest_Timer), intent(in) :: timer
+
+    real :: wallClockTime, cpuTime
+
+    wallClockTime = timer%getWallClockTime()
+    cpuTime = timer%getCpuTime()
+
+    if (wallClockTime < 1.0) then
+      write(this%fdOut, "(/, A, I0, A, I0, A)") 'Run ', sum(totals), ' tests in ',&
+          & int(wallClockTime * 1000.0), ' ms.'
+    else
+      write(this%fdOut, "(/, A, I0, A, F0.3, A)") 'Run ', sum(totals), ' tests in ',&
+          & wallClockTime, ' s'
+    end if
+    write(this%fdOut, "(3(A, I0), A)") 'Passed: ', totals(fytest_TestStatus%testSucceded),&
+        & ', Failed: ', totals(fytest_TestStatus%testFailed), &
+        & ', Skipped: ', totals(fytest_TestStatus%testSkipped), '.'
+
+  end subroutine fytest_TestLogger_logTestStatistics
+
+
+  function fytest_getFullTestName(suiteName, testName, testParams) result(fullTestName)
+    character(*), intent(in) :: suiteName
+    character(*), intent(in) :: testName
+    integer, intent(in) :: testParams(:)
+    character(100) :: fullTestName
+
+    if (size(testParams) > 0) then
+      write(fullTestName, "(A, ' / ', A, ' (', A, ') ')")  trim(suiteName), trim(testName),&
+          & trim(fytest_getTestParamStr(testParams))
+    else
+      write(fullTestName, "(A, ' / ', A)") trim(suiteName), trim(testName)
+    end if
+
+  end function fytest_getFullTestName
+
+
+  !> Starts the timer.
+  subroutine fytest_Timer_start(this)
+    class(fytest_Timer), intent(inout) :: this
+
+    call cpu_time(this%startTime)
+    call system_clock(count=this%startCount, count_rate=this%countRate)
+
+  end subroutine fytest_Timer_start
+
+
+  !> Stops the timer.
+  subroutine fytest_Timer_stop(this)
+    class(fytest_Timer), intent(inout) :: this
+
+    call cpu_time(this%endTime)
+    call system_clock(count=this%endCount)
+
+  end subroutine fytest_Timer_stop
+
+
+  !> Returns the measured CPU time
+  function fytest_Timer_getCpuTime(this) result(cpuTime)
+    class(fytest_Timer), intent(in) :: this
+    real :: cpuTime
+
+    cpuTime = this%endTime - this%startTime
+
+  end function fytest_Timer_getCpuTime
+
+
+  !> Returns the measured wall clock time.
+  function fytest_Timer_getWallClockTime(this) result(wallClockTime)
+    class(fytest_Timer), intent(in) :: this
+    real :: wallClockTime
+
+    if (this%countRate == 0) then
+      wallClockTime = 0.0
+    else
+      wallClockTime = real(this%endCount - this%startCount) / real(this%countRate)
+    end if
+
+  end function fytest_Timer_getWallClockTime
+
 
 
 end module fytest_lib

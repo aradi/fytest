@@ -228,13 +228,14 @@ contains
 
 
 #:for FIXTURE_NAME, FIXTURE in fytest_fixtures.items()
-  subroutine fytest_runFixturedTest_${FIXTURE_NAME}$(testname, testparams)
+  subroutine fytest_runFixturedTest_${FIXTURE_NAME}$(testname, testparams, testResult)
     character(*), intent(in) :: testname
     integer, intent(in) :: testparams(:)
+    type(fytest_TestResult), intent(out) :: testResult
 
     $:FIXTURE.get("specification", '')
     call fytest_setUpParams(testparams)
-    call fytest_runTest(testname)
+    call fytest_runTest(testname, testResult)
 
   contains
 
@@ -257,8 +258,9 @@ contains
     end subroutine fytest_setUpParams
 
 
-    subroutine fytest_runTest(testname)
+    subroutine fytest_runTest(testname, testResult)
       character(*), intent(in) :: testname
+      type(fytest_TestResult), intent(out) :: testResult
 
       #:if FIXTURE.get("initializer") is not None
         call fytest_initializeFixture()
@@ -267,7 +269,7 @@ contains
       select case (testname)
       #:for TEST_NAME in FIXTURE["tests"]
         case ("${TEST_NAME}$")
-          call fytest_runTest_${TEST_NAME}$()
+          call fytest_runTest_${TEST_NAME}$(testResult)
       #:endfor
       case default
         print *, 'ERROR: Invalid test name "${TEST_NAME}$" in suite "${NAME}$", fixture&
@@ -298,8 +300,13 @@ contains
 
     #:for TEST_NAME in FIXTURE["tests"]
 
-      subroutine fytest_runTest_${TEST_NAME}$()
+      subroutine fytest_runTest_${TEST_NAME}$(fytest_testRes)
+        type(fytest_TestResult), intent(out) :: fytest_testRes
+
         ${fytest_tests[TEST_NAME]["implementation"]}$
+
+        fytest_testRes%testStatus = fytest_TestStatus%testSucceded
+
       end subroutine fytest_runTest_${TEST_NAME}$
 
     #:endfor
@@ -351,14 +358,19 @@ program fytest_test_driver
   #:endfor
   implicit none
 
+  type(fytest_Timer) :: fytest_testTimer
   type(fytest_SuiteParams), allocatable :: fytest_suites(:)
   type(fytest_TestContainer), allocatable :: fytest_testContainers(:)
+  type(fytest_TestLogger) :: fytest_logger
 
+  call fytest_testTimer%start()
   call fytest_initializeAllSuites()
   call fytest_getSuiteInfos(fytest_suites)
   call fytest_getFlatTestArray(fytest_suites, fytest_testContainers)
-  call fytest_runTests(fytest_testContainers)
+  call fytest_runTests(fytest_testContainers, fytest_logger)
   call fytest_finalizeAllSuites()
+  call fytest_testTimer%stop()
+  call fytest_generateFinalReport(fytest_testContainers, fytest_logger, fytest_testTimer)
 
 contains
 
@@ -396,11 +408,10 @@ end program fytest_test_driver
 #!     COND: Condition in the REQUIRE macro.
 #!
 #:def fytest_render_require(COND)
-print *, 'REQUIRE CALLED'
-print *, '  COND: ${COND}$'
-if (${COND}$) then
-  print *, '  COND FULFILLED'
-else
-  print *, '  COND **NOT** FULFILLED'
+if (.not. (${COND}$)) then
+  fytest_testRes%testStatus = fytest_TestStatus%testFailed
+  fytest_testRes%line = ${_LINE_}$
+  fytest_testRes%errorMsg = "${COND}$"
+  return
 end if
 #:enddef
