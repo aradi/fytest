@@ -4,46 +4,55 @@
 module fytest_lib
   use, intrinsic :: iso_fortran_env
   implicit none
+  private
+
+  public :: fytest_SuiteContainer, fytest_SuiteParams
+  public :: fytest_FixtureParams
+  public :: fytest_TestContainer, fytest_TestResult, fytest_TestStatus
+  public :: fytest_Timer, fytest_TestLogger
+  public :: fytest_initializeSuites, fytest_finalizeSuites, fytest_getSuiteInfos
+  public :: fytest_getFlatTestArray, fytest_runTests
+  public :: fytest_generateFinalReport
 
 
-  type :: fytest_TestStatusHelper
+  type :: TestStatusHelper
     integer :: testSucceded = 1
     integer :: testFailed = 2
     integer :: testSkipped = 3
-  end type fytest_TestStatusHelper
+  end type TestStatusHelper
 
-  type(fytest_TestStatusHelper), parameter :: fytest_TestStatus = fytest_TestStatusHelper()
+  type(TestStatusHelper), parameter :: fytest_TestStatus = TestStatusHelper()
 
   character(10), parameter :: statusChars(3) = [character(10) :: "Success", "FAILED", "Skipped"]
 
 
   type :: fytest_TestResult
-    integer :: testStatus = fytest_TestStatus%testFailed
+    integer :: testStatus
     character(:), allocatable :: errorMsg
     integer :: line
   end type fytest_TestResult
 
 
   abstract interface
-    subroutine fytest_TestRunnerIface(testName, testParams, testResult)
+    subroutine testRunnerIface(testName, testParams, testResult)
       import :: fytest_TestResult
       character(*), intent(in) :: testName
       integer, intent(in) :: testParams(:)
       type(fytest_TestResult), intent(out) :: testResult
-    end subroutine fytest_TestRunnerIface
+    end subroutine testRunnerIface
   end interface
 
 
-  type :: fytest_VarChar
+  type :: VarChar
     character(:), allocatable :: str
-  end type fytest_VarChar
+  end type VarChar
 
 
   type :: fytest_FixtureParams
     character(:), allocatable :: name
-    type(fytest_VarChar), allocatable :: tests(:)
+    type(VarChar), allocatable :: tests(:)
     integer, allocatable :: paramBounds(:,:)
-    procedure(fytest_TestRunnerIface), pointer, nopass :: testRunner => null()
+    procedure(testRunnerIface), pointer, nopass :: testRunner => null()
   end type fytest_FixtureParams
 
 
@@ -54,10 +63,29 @@ module fytest_lib
   end type fytest_SuiteParams
 
 
+  abstract interface
+    subroutine suiteBuilderIface()
+    end subroutine suiteBuilderIface
+
+    subroutine suiteParamGetterIface(suite)
+      import :: fytest_SuiteParams
+      type(fytest_SuiteParams), intent(out) :: suite
+    end subroutine suiteParamGetterIface
+  end interface
+
+
+  type :: fytest_SuiteContainer
+    character(:), allocatable :: name
+    procedure(SuiteBuilderIface), pointer, nopass :: suiteInitializer => null()
+    procedure(SuiteBuilderIface), pointer, nopass :: suiteFinalizer => null()
+    procedure(SuiteParamGetterIface), pointer, nopass :: suiteParamGetter => null()
+  end type fytest_SuiteContainer
+
+
   type :: fytest_TestContainer
     character(:), allocatable :: fileName, suiteName, fixtureName, testName
     integer, allocatable :: testParams(:)
-    procedure(fytest_TestRunnerIface), pointer, nopass :: testRunner => null()
+    procedure(testRunnerIface), pointer, nopass :: testRunner => null()
     type(fytest_TestResult) :: testResult
   end type fytest_TestContainer
 
@@ -86,6 +114,49 @@ module fytest_lib
 
 contains
 
+  subroutine fytest_initializeSuites(suiteContainers)
+    type(fytest_SuiteContainer), intent(in) :: suiteContainers(:)
+
+    integer :: iSuite
+
+    do iSuite = 1, size(suiteContainers)
+      if (associated(suiteContainers(iSuite)%suiteInitializer)) then
+        call suiteContainers(iSuite)%suiteInitializer()
+      end if
+    end do
+
+  end subroutine fytest_initializeSuites
+
+
+  subroutine fytest_finalizeSuites(suiteContainers)
+    type(fytest_SuiteContainer), intent(in) :: suiteContainers(:)
+
+    integer :: iSuite
+
+    do iSuite = 1, size(suiteContainers)
+      if (associated(suiteContainers(iSuite)%suiteFinalizer)) then
+        call suiteContainers(iSuite)%suiteFinalizer()
+      end if
+    end do
+
+  end subroutine fytest_finalizeSuites
+
+
+  subroutine fytest_getSuiteInfos(suiteContainers, suites)
+    type(fytest_SuiteContainer), intent(in) :: suiteContainers(:)
+    type(fytest_SuiteParams), allocatable, intent(out) :: suites(:)
+
+    integer :: iSuite, nSuites
+
+    nSuites = size(suiteContainers)
+    allocate(suites(nSuites))
+    do iSuite = 1, nSuites
+      call suiteContainers(iSuite)%suiteParamGetter(suites(iSuite))
+    end do
+
+  end subroutine fytest_getSuiteInfos
+
+
   subroutine fytest_TestContainer_initialize(this, suite, fixture, iTest, iParamTest)
     type(fytest_TestContainer), intent(out) :: this
     type(fytest_SuiteParams), intent(in) :: suite
@@ -99,7 +170,7 @@ contains
     this%testName = fixture%tests(iTest)%str
     this%testRunner => fixture%testRunner
     if (iParamTest > 0) then
-      this%testParams = fytest_getParams(iParamTest, fixture%paramBounds)
+      this%testParams = getParams(iParamTest, fixture%paramBounds)
     else
       this%testParams = [integer ::]
     end if
@@ -168,6 +239,7 @@ contains
 
     do iTest = 1, size(testContainers)
       call logger%logTestRun(testContainers(iTest))
+      testContainers(iTest)%testResult%testStatus = fytest_TestStatus%testSucceded
       call testContainers(iTest)%testRunner(testContainers(iTest)%testName,&
           & testContainers(iTest)%testParams, testContainers(iTest)%testResult)
       call logger%logTestResult(testContainers(iTest))
@@ -198,43 +270,9 @@ contains
   end subroutine fytest_generateFinalReport
 
 
-  function fytest_getParams(ind, paramBounds) result(params)
-    integer, intent(in) :: ind
-    integer, intent(in) :: paramBounds(:,:)
-    integer :: params(size(paramBounds, dim=2))
-
-    integer :: nParams(size(paramBounds, dim=2))
-    integer :: ind0, divisor, iParam
-
-    nParams(:) = paramBounds(2, :) - paramBounds(1, :) + 1
-    ind0 = ind - 1
-    divisor = product(nParams)
-    do iParam = size(paramBounds, dim=2), 2, -1
-      divisor = divisor / nParams(iParam)
-      params(iParam) = ind0 / divisor
-      ind0 = ind0 - divisor * params(iParam)
-    end do
-    params(1) = ind0
-    params(:) = params + 1
-
-  end function fytest_getParams
-
-
-  function fytest_getTestParamStr(testParams) result(paramStr)
-    integer, intent(in) :: testParams(:)
-    character(100) :: paramStr
-
-    character(100) :: formatStr
-
-    if (size(testParams) == 1) then
-      write(paramStr, "(I0)") testParams(1)
-    else
-      write(formatStr, "(A,I0,A)") "(", size(testParams) - 1, "(I0,', '),I0)"
-      write(paramStr, formatStr) testParams
-    end if
-
-  end function fytest_getTestParamStr
-
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!  TestLogger
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   subroutine fytest_TestLogger_logStatus(this, status, msg)
     class(fytest_TestLogger), intent(in) :: this
@@ -251,7 +289,7 @@ contains
     type(fytest_TestContainer), intent(in) :: test
 
     call this%logStatus('Running',&
-        & trim(fytest_getFullTestName(test%suiteName, test%testName, test%testParams)))
+        & trim(getFullTestName(test%suiteName, test%testName, test%testParams)))
 
   end subroutine fytest_TestLogger_logTestRun
 
@@ -261,7 +299,7 @@ contains
     type(fytest_TestContainer), intent(in) :: test
 
     call this%logStatus(trim(statusChars(test%testResult%testStatus)),&
-        & trim(fytest_getFullTestName(test%suiteName, test%testName, test%testParams)))
+        & trim(getFullTestName(test%suiteName, test%testName, test%testParams)))
 
   end subroutine fytest_TestLogger_logTestResult
 
@@ -271,12 +309,11 @@ contains
     type(fytest_TestContainer), intent(in) :: test
 
     write(this%fdOut, "(/, A, 1X, T20, A)") 'FAILING TEST:',&
-        & trim(fytest_getFullTestName(test%suiteName, test%testName, test%testParams))
+        & trim(getFullTestName(test%suiteName, test%testName, test%testParams))
     write(this%fdOut, "(A, T20, 2A, I0)") 'Failed at: ', test%fileName, ':', test%testResult%line
     write(this%fdOut, "(A, T20, A)") 'Failing condition: ', test%testResult%errorMsg
 
   end subroutine fytest_TestLogger_logFailedTest
-
 
 
   subroutine fytest_TestLogger_logTestStatistics(this, totals, timer)
@@ -303,20 +340,9 @@ contains
   end subroutine fytest_TestLogger_logTestStatistics
 
 
-  function fytest_getFullTestName(suiteName, testName, testParams) result(fullTestName)
-    character(*), intent(in) :: suiteName
-    character(*), intent(in) :: testName
-    integer, intent(in) :: testParams(:)
-    character(100) :: fullTestName
-
-    if (size(testParams) > 0) then
-      write(fullTestName, "(A, ' / ', A, ' (', A, ') ')")  trim(suiteName), trim(testName),&
-          & trim(fytest_getTestParamStr(testParams))
-    else
-      write(fullTestName, "(A, ' / ', A)") trim(suiteName), trim(testName)
-    end if
-
-  end function fytest_getFullTestName
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!  Timer
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
   !> Starts the timer.
@@ -362,6 +388,63 @@ contains
 
   end function fytest_Timer_getWallClockTime
 
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!  Helper functions
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  function getParams(ind, paramBounds) result(params)
+    integer, intent(in) :: ind
+    integer, intent(in) :: paramBounds(:,:)
+    integer :: params(size(paramBounds, dim=2))
+
+    integer :: nParams(size(paramBounds, dim=2))
+    integer :: ind0, divisor, iParam
+
+    nParams(:) = paramBounds(2, :) - paramBounds(1, :) + 1
+    ind0 = ind - 1
+    divisor = product(nParams)
+    do iParam = size(paramBounds, dim=2), 2, -1
+      divisor = divisor / nParams(iParam)
+      params(iParam) = ind0 / divisor
+      ind0 = ind0 - divisor * params(iParam)
+    end do
+    params(1) = ind0
+    params(:) = params + 1
+
+  end function getParams
+
+
+  function getTestParamStr(testParams) result(paramStr)
+    integer, intent(in) :: testParams(:)
+    character(100) :: paramStr
+
+    character(100) :: formatStr
+
+    if (size(testParams) == 1) then
+      write(paramStr, "(I0)") testParams(1)
+    else
+      write(formatStr, "(A,I0,A)") "(", size(testParams) - 1, "(I0,', '),I0)"
+      write(paramStr, formatStr) testParams
+    end if
+
+  end function getTestParamStr
+
+
+  function getFullTestName(suiteName, testName, testParams) result(fullTestName)
+    character(*), intent(in) :: suiteName
+    character(*), intent(in) :: testName
+    integer, intent(in) :: testParams(:)
+    character(100) :: fullTestName
+
+    if (size(testParams) > 0) then
+      write(fullTestName, "(A, ' / ', A, ' (', A, ') ')")  trim(suiteName), trim(testName),&
+          & trim(getTestParamStr(testParams))
+    else
+      write(fullTestName, "(A, ' / ', A)") trim(suiteName), trim(testName)
+    end if
+
+  end function getFullTestName
 
 
 end module fytest_lib

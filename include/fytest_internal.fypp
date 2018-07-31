@@ -172,7 +172,22 @@ contains
   $:IMPLEMENTATION.strip()
 
 
-  subroutine fytest_getSuite_${NAME}$(suite)
+  subroutine fytest_getSuiteContainer_${NAME}$(suiteContainer)
+    type(fytest_SuiteContainer), intent(out) :: suiteContainer
+
+    suiteContainer%name = "${NAME}$"
+    #:if "initializer" in fytest_current_suite
+      suiteContainer%suiteInitializer => fytest_initializeSuite
+    #:endif
+    #:if "finalizer" in fytest_current_suite
+      suiteContainer%suiteFinalizer => fytest_finalizeSuite
+    #:endif
+    suiteContainer%suiteParamGetter => fytest_getSuite
+
+  end subroutine fytest_getSuiteContainer_${NAME}$
+
+
+  subroutine fytest_getSuite(suite)
     type(fytest_SuiteParams), intent(out) :: suite
 
     suite%name = "${NAME}$"
@@ -182,18 +197,20 @@ contains
       call fytest_getFixture_${FIXTURE_NAME}$(suite%fixtures(${FIXTURE_IND + 1}$))
     #:endfor
 
-  end subroutine fytest_getSuite_${NAME}$
+  end subroutine fytest_getSuite
 
 
-  subroutine fytest_initializeSuite_${NAME}$()
-    ${fytest_current_suite.get("initializer")}$
-  end subroutine fytest_initializeSuite_${NAME}$
+  #:if "initializer" in fytest_current_suite
+    subroutine fytest_initializeSuite
+      ${fytest_current_suite["initializer"]}$
+    end subroutine fytest_initializeSuite
+  #:endif
 
-
-  subroutine fytest_finalizeSuite_${NAME}$()
-    ${fytest_current_suite.get("finalizer")}$
-  end subroutine fytest_finalizeSuite_${NAME}$
-
+  #:if "finalizer" in fytest_current_suite
+    subroutine fytest_finalizeSuite
+       ${fytest_current_suite["finalizer"]}$
+    end subroutine fytest_finalizeSuite
+  #:endif
 
   #:for FIXTURE_NAME, FIXTURE in fytest_fixtures.items()
     subroutine fytest_getFixture_${FIXTURE_NAME}$(fixture)
@@ -262,6 +279,8 @@ contains
       character(*), intent(in) :: testname
       type(fytest_TestResult), intent(out) :: testResult
 
+      testResult%testStatus = fytest_testStatus%testSucceded
+
       #:if FIXTURE.get("initializer") is not None
         call fytest_initializeFixture()
       #:endif
@@ -301,11 +320,9 @@ contains
     #:for TEST_NAME in FIXTURE["tests"]
 
       subroutine fytest_runTest_${TEST_NAME}$(fytest_testRes)
-        type(fytest_TestResult), intent(out) :: fytest_testRes
+        type(fytest_TestResult), intent(inout) :: fytest_testRes
 
         ${fytest_tests[TEST_NAME]["implementation"]}$
-
-        fytest_testRes%testStatus = fytest_TestStatus%testSucceded
 
       end subroutine fytest_runTest_${TEST_NAME}$
 
@@ -327,9 +344,7 @@ module fytest_suite_wrapper_${NAME}$
   implicit none
   private
 
-  public :: fytest_initializeSuite_${NAME}$
-  public :: fytest_finalizeSuite_${NAME}$
-  public :: fytest_getSuite_${NAME}$
+  public :: fytest_getSuiteContainer_${NAME}$
 
 end module fytest_suite_wrapper_${NAME}$
 
@@ -358,45 +373,33 @@ program fytest_test_driver
   #:endfor
   implicit none
 
-  type(fytest_Timer) :: fytest_testTimer
+  type(fytest_SuiteContainer), allocatable :: fytest_suiteContainers(:)
   type(fytest_SuiteParams), allocatable :: fytest_suites(:)
   type(fytest_TestContainer), allocatable :: fytest_testContainers(:)
+  type(fytest_Timer) :: fytest_testTimer
   type(fytest_TestLogger) :: fytest_logger
 
+  call fytest_getSuiteContainers(fytest_suiteContainers)
   call fytest_testTimer%start()
-  call fytest_initializeAllSuites()
-  call fytest_getSuiteInfos(fytest_suites)
+  call fytest_initializeSuites(fytest_suiteContainers)
+  call fytest_getSuiteInfos(fytest_suiteContainers, fytest_suites)
   call fytest_getFlatTestArray(fytest_suites, fytest_testContainers)
   call fytest_runTests(fytest_testContainers, fytest_logger)
-  call fytest_finalizeAllSuites()
+  call fytest_finalizeSuites(fytest_suiteContainers)
   call fytest_testTimer%stop()
   call fytest_generateFinalReport(fytest_testContainers, fytest_logger, fytest_testTimer)
 
 contains
 
-  subroutine fytest_initializeAllSuites()
-    #:for SUITE_NAME in fytest_suite_names
-      call fytest_initializeSuite_${SUITE_NAME}$()
-    #:endfor
-    end subroutine fytest_initializeAllSuites
+  subroutine fytest_getSuiteContainers(suiteContainers)
+    type(fytest_SuiteContainer), intent(out), allocatable :: suiteContainers(:)
 
-
-  subroutine fytest_finalizeAllSuites()
-    #:for SUITE_NAME in fytest_suite_names
-      call fytest_finalizeSuite_${SUITE_NAME}$()
-    #:endfor
-    end subroutine fytest_finalizeAllSuites
-
-
-  subroutine fytest_getSuiteInfos(suites)
-    type(fytest_SuiteParams), allocatable, intent(out) :: suites(:)
-
-    allocate(suites(${len(fytest_suite_names)}$))
-    #:for IND, SUITE_NAME in enumerate(fytest_suite_names)
-      call fytest_getSuite_${SUITE_NAME}$(suites(${IND + 1}$))
+    allocate(suiteContainers(${len(fytest_suite_names)}$))
+    #:for SUITE_IND, SUITE_NAME in enumerate(fytest_suite_names)
+      call fytest_getSuiteContainer_${SUITE_NAME}$(suiteContainers(${SUITE_IND + 1}$))
     #:endfor
 
-    end subroutine fytest_getSuiteInfos
+  end subroutine fytest_getSuiteContainers
 
 end program fytest_test_driver
 #:enddef fytest_render_test_driver

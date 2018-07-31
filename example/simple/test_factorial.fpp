@@ -13,11 +13,6 @@
   #:endblock TEST_SUITE_INITIALIZER
 
 
-  #:block TEST_SUITE_FINALIZER
-    continue
-  #:endblock TEST_SUITE_FINALIZER
-
-
   #:block TEST('5')
     @:REQUIRE(factorial(5) == 120)
   #:endblock TEST
