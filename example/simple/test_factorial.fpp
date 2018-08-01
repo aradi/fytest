@@ -48,16 +48,20 @@
       continue
     end subroutine finalizer_helper
 
+    #:block TEST('factorial_special_1')
+      @:REQUIRE(factorial(special_value) == special_result)
+    #:endblock TEST
+
+
+    #:block TEST('factorial_special_0')
+      @:REQUIRE(factorial(0) == special_result)
+    #:endblock TEST
+
   #:endblock TEST_FIXTURE
 
 
-  #:block TEST('factorial_special_1', FIXTURE='special_cases')
-    @:REQUIRE(factorial(special_value) == special_result)
-  #:endblock TEST
-
-
-  #:block TEST('factorial_special_0', FIXTURE='special_cases')
-    @:REQUIRE(factorial(0) == special_result)
+  #:block TEST('6')
+    @:REQUIRE(factorial(6) == 720)
   #:endblock TEST
 
 

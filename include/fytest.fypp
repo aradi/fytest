@@ -52,10 +52,11 @@ $:fytest_render_require(COND)
 #!     IMPLEMENTATION: Test implementation
 #!     FIXTURE: Optional test fixture
 #!
-#:def TEST(NAME, IMPLEMENTATION, FIXTURE='default')
+#:def TEST(NAME, IMPLEMENTATION)
 #:mute
-$:fytest_register_test(NAME, IMPLEMENTATION, FIXTURE)
+$:fytest_register_test(NAME, IMPLEMENTATION)
 #:endmute
+$:fytest_render_registered_test_marker()
 #:enddef TEST
 
 
@@ -68,9 +69,9 @@ $:fytest_register_test(NAME, IMPLEMENTATION, FIXTURE)
 #!
 #:def TEST_SUITE(NAME, SPECIFICATION, IMPLEMENTATION)
 #:mute
-$:fytest_register_test_suite(NAME)
+$:fytest_register_test_suite(NAME, SPECIFICATION, IMPLEMENTATION)
 #:endmute
-$:fytest_render_test_suite(NAME, SPECIFICATION, IMPLEMENTATION)
+$:fytest_render_current_test_suite()
 #:mute
 $:fytest_reset_current_test_suite()
 #:endmute
@@ -97,7 +98,9 @@ $:fytest_render_test_driver()
 #!        the array it will iterate over.
 #!
 #:def TEST_FIXTURE(NAME, SPECIFICATION, IMPLEMENTATION='', PARAMETERS=None)
+#:mute
 $:fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS)
+#:endmute
 #:enddef TEST_FIXTURE
 
 
@@ -107,7 +110,9 @@ $:fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS)
 #!     IMPLEMENTATION: Test fixture initializer implementation
 #!
 #:def TEST_FIXTURE_INITIALIZER(IMPLEMENTATION)
+#:mute
 $:fytest_register_test_fixture_initializer(IMPLEMENTATION)
+#:endmute
 #:enddef TEST_FIXTURE_INITIALIZER
 
 
@@ -117,7 +122,9 @@ $:fytest_register_test_fixture_initializer(IMPLEMENTATION)
 #!     IMPLEMENTATION: Test fixture finalizer implementation
 #!
 #:def TEST_FIXTURE_FINALIZER(IMPLEMENTATION)
+#:mute
 $:fytest_register_test_fixture_finalizer(IMPLEMENTATION)
+#:endmute
 #:enddef TEST_FIXTURE_FINALIZER
 
 
@@ -127,7 +134,9 @@ $:fytest_register_test_fixture_finalizer(IMPLEMENTATION)
 #!     IMPLEMENTATION: Test suite initializer implementation
 #!
 #:def TEST_SUITE_INITIALIZER(IMPLEMENTATION)
+#:mute
 $:fytest_register_test_suite_initializer(IMPLEMENTATION)
+#:endmute
 #:enddef TEST_SUITE_INITIALIZER
 
 
@@ -137,7 +146,9 @@ $:fytest_register_test_suite_initializer(IMPLEMENTATION)
 #!     IMPLEMENTATION: Test suite finalizer implementation
 #!
 #:def TEST_SUITE_FINALIZER(IMPLEMENTATION)
+#:mute
 $:fytest_register_test_suite_finalizer(IMPLEMENTATION)
+#:endmute
 #:enddef TEST_SUITE_FINALIZER
 
 
@@ -165,10 +176,13 @@ $:fytest_render_test_library()
 #:set fytest_test_names = []
 
 #! Fixtures in the current suite
-#:set fytest_fixtures = {"default": {"tests": []}}
+#:set fytest_fixtures = {}
 
 #! Current fixture
 #:set fytest_current_fixture = {}
+
+#! String to emit and collect for registered tests
+#:set fytest_registered_test_marker = '\n#:_FYTEST_REGISTERED_TEST_\n'
 
 
 #! Registers a test case
@@ -177,7 +191,7 @@ $:fytest_render_test_library()
 #!     NAME: Test case name
 #!     IMPLEMENTATION: Test implementation
 #!
-#:def fytest_register_test(NAME, IMPLEMENTATION, FIXTURE)
+#:def fytest_register_test(NAME, IMPLEMENTATION)
 #:mute
 
 #:global fytest_tests
@@ -188,17 +202,21 @@ $:fytest_render_test_library()
   #:stop "Test " + NAME + " has already been defined"
 #:endif
 
-#:if FIXTURE not in fytest_fixtures
-  #:stop "Fixture " + FIXTURE + " has not been defined yet"
-#:endif
-
 $:fytest_test_names.append(NAME)
-$:fytest_tests.update([(NAME,&
-    & {"implementation": IMPLEMENTATION.strip(), "fixture": FIXTURE})])
-$:fytest_fixtures[FIXTURE]["tests"].append(NAME)
+$:fytest_tests.update([(NAME, {"implementation": IMPLEMENTATION.strip()})])
 
 #:endmute
 #:enddef fytest_register_test
+
+#! Renders a marker for a registered test.
+#!
+#! The marker will not appear in the final output as it will be collected later either by
+#! fytest_register_fixture() (for tests within a fixture) or by fytest_register_suite() (for tests
+#! without a fixture
+#!
+#:def fytest_render_registered_test_marker()
+$:fytest_registered_test_marker
+#:enddef fytest_render_registered_test_marker
 
 
 #! Registers a test fixture
@@ -211,16 +229,22 @@ $:fytest_fixtures[FIXTURE]["tests"].append(NAME)
 #!
 #:def fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS)
 #:mute
+
 #:global fytest_fixtures
 #:global fytest_current_fixture
+#:global fytest_test_names
+
+#:set nr_tests_in_fixture = IMPLEMENTATION.count(fytest_registered_test_marker)
+#:set IMPLEMENTATION = IMPLEMENTATION.replace(fytest_registered_test_marker, '')
 $:fytest_fixtures.update([(NAME, {&
     & "initializer": fytest_current_fixture.get("initializer"),&
     & "finalizer": fytest_current_fixture.get("finalizer"),&
     & "specification": SPECIFICATION.strip(),&
     & "implementation": IMPLEMENTATION.strip(),&
     & "parameters": PARAMETERS,&
-    & "tests": []&
+    & "tests": fytest_test_names[len(fytest_test_names) - nr_tests_in_fixture :]&
     & })])
+#:set fytest_test_names = fytest_test_names[: len(fytest_test_names) - nr_tests_in_fixture]
 #:set fytest_current_fixture = {}
 #:endmute
 #:enddef fytest_register_fixture
@@ -263,10 +287,32 @@ $:fytest_current_fixture.update([("finalizer", IMPLEMENTATION.strip())])
 #! Args:
 #!     NAME: Name of the test suite.
 #!
-#:def fytest_register_test_suite(NAME)
+#:def fytest_register_test_suite(NAME, SPECIFICATION, IMPLEMENTATION)
 #:mute
+
 #:global fytest_suite_names
+#:global fytest_current_suite
+#:global fytest_fixtures
+#:global fytest_test_names
+
+#:set nr_tests_without_fixture = IMPLEMENTATION.count('FYTEST_REGISTERED_TEST')
+#:set IMPLEMENTATION = IMPLEMENTATION.replace('FYTEST_REGISTERED_TEST', '')
+
 $:fytest_suite_names.append(NAME)
+$:fytest_current_suite.update([("name", NAME), ("specification", SPECIFICATION.strip()),&
+    & ("implementation", IMPLEMENTATION.strip())])
+
+#:if nr_tests_without_fixture > 0
+  $:fytest_fixtures.update([('default', {&
+      & "tests": fytest_test_names[len(fytest_test_names) - nr_tests_without_fixture :]&
+      & })])
+  #:set fytest_test_names = fytest_test_names[: len(fytest_test_names) - nr_tests_without_fixture]
+#:endif
+
+#:if len(fytest_test_names) > 0
+  #:stop "Internal error: tests without any fixture found" + str(fytest_test_names)
+#:endif
+
 #:endmute
 #:enddef
 
@@ -310,20 +356,21 @@ $:fytest_current_suite.update([("finalizer", IMPLEMENTATION.strip())])
 #!     SPECIFICATION: Code containing the specifications
 #!     IMPLEMENTATION: Code containing the implementations
 #!
-#:def fytest_render_test_suite(NAME, SPECIFICATION, IMPLEMENTATION)
+#:def fytest_render_current_test_suite()
 #:mute
+#:set NAME = fytest_current_suite["name"]
 #:endmute
 !
 ! Test suite module ${NAME}$
 !
 module fytest_suite_${NAME}$
   use fytest_lib
-  $:SPECIFICATION.strip()
 
+  $:fytest_current_suite["specification"]
 
 contains
 
-  $:IMPLEMENTATION.strip()
+  $:fytest_current_suite["implementation"]
 
 
   subroutine fytest_getSuiteContainer_${NAME}$(suiteContainer)
@@ -502,7 +549,7 @@ module fytest_suite_wrapper_${NAME}$
 
 end module fytest_suite_wrapper_${NAME}$
 
-#:enddef fytest_render_test_suite
+#:enddef fytest_render_current_test_suite
 
 
 #! Resets the current test suite
