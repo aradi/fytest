@@ -1,5 +1,1007 @@
 #:mute
-#:include 'fytest_internal.fypp'
-#:include 'fytest_lib.fypp'
-#:include 'fytest_macros.fypp'
+
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#!!!  Internals
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+#! Names of the known test suites
+#:set fytest_suite_names = []
+
+#! The current test suite
+#:set fytest_current_suite = {}
+
+#! Tests in the current suite
+#:set fytest_tests = {}
+
+#! Names of the test names in the current suite
+#:set fytest_test_names = []
+
+#! Fixtures in the current suite
+#:set fytest_fixtures = {"default": {"tests": []}}
+
+#! Current fixture
+#:set fytest_current_fixture = {}
+
+
+#! Registers a test case
+#!
+#! Args:
+#!     NAME: Test case name
+#!     IMPLEMENTATION: Test implementation
+#!
+#:def fytest_register_test(NAME, IMPLEMENTATION, FIXTURE)
+#:mute
+
+#:global fytest_tests
+#:global fytest_test_names
+#:global fytest_fixtures
+
+#:if NAME in fytest_tests
+  #:stop "Test " + NAME + " has already been defined"
+#:endif
+
+#:if FIXTURE not in fytest_fixtures
+  #:stop "Fixture " + FIXTURE + " has not been defined yet"
+#:endif
+
+$:fytest_test_names.append(NAME)
+$:fytest_tests.update([(NAME,&
+    & {"implementation": IMPLEMENTATION.strip(), "fixture": FIXTURE})])
+$:fytest_fixtures[FIXTURE]["tests"].append(NAME)
+
+#:endmute
+#:enddef fytest_register_test
+
+
+#! Registers a test fixture
+#!
+#! Args:
+#!     NAME: Name of the fixture
+#!     SPECIFICATION: Specificiation of the fixture
+#!     IMPLEMENTATION: Implementation of the fixture
+#!     PARAMETERS: Parameters to make parameterized tests.
+#!
+#:def fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS)
+#:mute
+#:global fytest_fixtures
+#:global fytest_current_fixture
+$:fytest_fixtures.update([(NAME, {&
+    & "initializer": fytest_current_fixture.get("initializer"),&
+    & "finalizer": fytest_current_fixture.get("finalizer"),&
+    & "specification": SPECIFICATION.strip(),&
+    & "implementation": IMPLEMENTATION.strip(),&
+    & "parameters": PARAMETERS,&
+    & "tests": []&
+    & })])
+#:set fytest_current_fixture = {}
+#:endmute
+#:enddef fytest_register_fixture
+
+
+#! Registers a test fixture initializer
+#!
+#! Args:
+#!     IMPLEMENTATION: implementation part of the test fixture finalizer
+#!
+#:def fytest_register_test_fixture_initializer(IMPLEMENTATION)
+#:mute
+#:global fytest_current_fixture
+#:if fytest_current_fixture.get("initializer") is not None
+  #:stop "Double specification of test initializer"
+#:endif
+$:fytest_current_fixture.update([("initializer", IMPLEMENTATION)])
+#:endmute
+#:enddef fytest_register_test_fixture_initializer
+
+
+#! Registers a test fixture finalizer
+#!
+#! Args:
+#!     IMPLEMENTATION: implementation part of the test fixture finalizer
+#!
+#:def fytest_register_test_fixture_finalizer(IMPLEMENTATION)
+#:mute
+#:global fytest_current_fixture
+#:if fytest_current_fixture.get("finalizer") is not None
+  #:stop "Double specification of test initializer"
+#:endif
+$:fytest_current_fixture.update([("finalizer", IMPLEMENTATION.strip())])
+#:endmute
+#:enddef fytest_register_test_fixture_finalizer
+
+
+#! Registers the name of a test suite
+#!
+#! Args:
+#!     NAME: Name of the test suite.
+#!
+#:def fytest_register_test_suite(NAME)
+#:mute
+#:global fytest_suite_names
+$:fytest_suite_names.append(NAME)
+#:endmute
+#:enddef
+
+
+#! Registers a test suite initializer
+#!
+#! Args:
+#!     IMPLEMENTATION: implementation part of the test suite initializer
+#!
+#:def fytest_register_test_suite_initializer(IMPLEMENTATION)
+#:mute
+#:global fytest_current_suite
+#:if fytest_current_suite.get("initializer") is not None
+  #:stop "Double specification of test suite initializer"
+#:endif
+$:fytest_current_suite.update([("initializer", IMPLEMENTATION.strip())])
+#:endmute
+#:enddef fytest_register_test_suite_initializer
+
+
+#! Registers a test suite finalizer
+#!
+#! Args:
+#!     IMPLEMENTATION: implementation part of the test suite finalizer
+#!
+#:def fytest_register_test_suite_finalizer(IMPLEMENTATION)
+#:mute
+#:global fytest_current_suite
+#:if fytest_current_suite.get("finalizer") is not None
+  #:stop "Double specification of test suite finalizer"
+#:endif
+$:fytest_current_suite.update([("finalizer", IMPLEMENTATION.strip())])
+#:endmute
+#:enddef fytest_register_test_suite_finalizer
+
+
+#! Generates the code for a test suite (module).
+#!
+#! Args:
+#!     NAME: Name of the test suite
+#!     SPECIFICATION: Code containing the specifications
+#!     IMPLEMENTATION: Code containing the implementations
+#!
+#:def fytest_render_test_suite(NAME, SPECIFICATION, IMPLEMENTATION)
+#:mute
+#:endmute
+!
+! Test suite module ${NAME}$
+!
+module fytest_suite_${NAME}$
+  use fytest_lib
+  $:SPECIFICATION.strip()
+
+
+contains
+
+  $:IMPLEMENTATION.strip()
+
+
+  subroutine fytest_getSuiteContainer_${NAME}$(suiteContainer)
+    type(fytest_SuiteContainer), intent(out) :: suiteContainer
+
+    suiteContainer%name = "${NAME}$"
+    #:if "initializer" in fytest_current_suite
+      suiteContainer%suiteInitializer => fytest_initializeSuite
+    #:endif
+    #:if "finalizer" in fytest_current_suite
+      suiteContainer%suiteFinalizer => fytest_finalizeSuite
+    #:endif
+    suiteContainer%suiteParamGetter => fytest_getSuite
+
+  end subroutine fytest_getSuiteContainer_${NAME}$
+
+
+  subroutine fytest_getSuite(suite)
+    type(fytest_SuiteParams), intent(out) :: suite
+
+    suite%name = "${NAME}$"
+    suite%fileName = "${_FILE_}$"
+    allocate(suite%fixtures(${len(fytest_fixtures)}$))
+    #:for FIXTURE_IND, FIXTURE_NAME in enumerate(fytest_fixtures)
+      call fytest_getFixture_${FIXTURE_NAME}$(suite%fixtures(${FIXTURE_IND + 1}$))
+    #:endfor
+
+  end subroutine fytest_getSuite
+
+
+  #:if "initializer" in fytest_current_suite
+    subroutine fytest_initializeSuite
+      ${fytest_current_suite["initializer"]}$
+    end subroutine fytest_initializeSuite
+  #:endif
+
+  #:if "finalizer" in fytest_current_suite
+    subroutine fytest_finalizeSuite
+       ${fytest_current_suite["finalizer"]}$
+    end subroutine fytest_finalizeSuite
+  #:endif
+
+  #:for FIXTURE_NAME, FIXTURE in fytest_fixtures.items()
+    subroutine fytest_getFixture_${FIXTURE_NAME}$(fixture)
+      type(fytest_FixtureParams), intent(out) :: fixture
+
+      $:FIXTURE.get("specification", '')
+      call getFixture(fixture)
+
+    contains
+
+      subroutine getFixture(fixture)
+        type(fytest_FixtureParams), intent(out) :: fixture
+
+        fixture%name = "${FIXTURE_NAME}$"
+        allocate(fixture%tests(${len(FIXTURE["tests"])}$))
+        #:for TEST_IND, TEST in enumerate(FIXTURE["tests"])
+          fixture%tests(${TEST_IND + 1}$)%str = "${TEST}$"
+        #:endfor
+        #:set FIXTURE_PARAMETERS = FIXTURE.get("parameters")
+        #:set FIXTURE_PARAMETERS = [] if FIXTURE_PARAMETERS is None else FIXTURE_PARAMETERS
+        allocate(fixture%paramBounds(2, ${len(FIXTURE_PARAMETERS)}$))
+        #:for IPARAM, FIXTURE_PARAM in enumerate(FIXTURE_PARAMETERS)
+          fixture%paramBounds(1, ${IPARAM + 1}$) = lbound(${FIXTURE_PARAM[1]}$, dim=1)
+          fixture%paramBounds(2, ${IPARAM + 1}$) = ubound(${FIXTURE_PARAM[1]}$, dim=1)
+        #:endfor
+        fixture%testRunner => fytest_runFixturedTest_${FIXTURE_NAME}$
+
+      end subroutine getFixture
+
+    end subroutine fytest_getFixture_${FIXTURE_NAME}$
+  #:endfor
+
+
+#:for FIXTURE_NAME, FIXTURE in fytest_fixtures.items()
+  subroutine fytest_runFixturedTest_${FIXTURE_NAME}$(testname, testparams, testResult)
+    character(*), intent(in) :: testname
+    integer, intent(in) :: testparams(:)
+    type(fytest_TestResult), intent(out) :: testResult
+
+    $:FIXTURE.get("specification", '')
+    call fytest_setUpParams(testparams)
+    call fytest_runTest(testname, testResult)
+
+  contains
+
+    $:FIXTURE.get("implementation", '')
+
+    subroutine fytest_setUpParams(testParams)
+      integer, intent(in) :: testParams(:)
+
+      #:set FIXTURE_PARAMETERS = FIXTURE.get("parameters")
+      #:set FIXTURE_PARAMETERS = [] if FIXTURE_PARAMETERS is None else FIXTURE_PARAMETERS
+      if (size(testParams) /= ${len(FIXTURE_PARAMETERS)}$) then
+        print *, "Internal error: invalid test parameter array size"
+        stop
+      end if
+      #:for IPARAM, FIXTURE_PARAM in enumerate(FIXTURE_PARAMETERS)
+        #:set ITERATOR, ARRAY = FIXTURE_PARAM
+        ${ITERATOR}$ = ${ARRAY}$(testParams(${IPARAM + 1}$))
+      #:endfor
+
+    end subroutine fytest_setUpParams
+
+
+    subroutine fytest_runTest(testname, testResult)
+      character(*), intent(in) :: testname
+      type(fytest_TestResult), intent(out) :: testResult
+
+      testResult%testStatus = fytest_testStatus%testSucceded
+
+      #:if FIXTURE.get("initializer") is not None
+        call fytest_initializeFixture()
+      #:endif
+
+      select case (testname)
+      #:for TEST_NAME in FIXTURE["tests"]
+        case ("${TEST_NAME}$")
+          call fytest_runTest_${TEST_NAME}$(testResult)
+      #:endfor
+      case default
+        print *, 'ERROR: Invalid test name "${TEST_NAME}$" in suite "${NAME}$", fixture&
+            & "${FIXTURE_NAME}$"'
+        stop
+      end select
+
+      #:if FIXTURE.get("finalizer") is not None
+        call fytest_finalizeFixture()
+      #:endif
+
+    end subroutine fytest_runTest
+
+
+    #:if FIXTURE.get("initializer") is not None
+      subroutine fytest_initializeFixture()
+        $:FIXTURE["initializer"]
+      end subroutine fytest_initializeFixture
+    #:endif
+
+
+    #:if FIXTURE.get("finalizer") is not None
+      subroutine fytest_finalizeFixture()
+        $:FIXTURE["finalizer"]
+      end subroutine fytest_finalizeFixture
+    #:endif
+
+
+    #:for TEST_NAME in FIXTURE["tests"]
+
+      subroutine fytest_runTest_${TEST_NAME}$(fytest_testRes)
+        type(fytest_TestResult), intent(inout) :: fytest_testRes
+
+        ${fytest_tests[TEST_NAME]["implementation"]}$
+
+      end subroutine fytest_runTest_${TEST_NAME}$
+
+    #:endfor
+
+  end subroutine fytest_runFixturedTest_${FIXTURE_NAME}$
+
+#:endfor
+
+
+end module fytest_suite_${NAME}$
+
+
+!
+! Test suite wrapper module ${NAME}$
+!
+module fytest_suite_wrapper_${NAME}$
+  use fytest_suite_${NAME}$
+  implicit none
+  private
+
+  public :: fytest_getSuiteContainer_${NAME}$
+
+end module fytest_suite_wrapper_${NAME}$
+
+#:enddef fytest_render_test_suite
+
+
+#! Resets the current test suite
+#!
+#! Should be called after the test suite has been rendered.
+#!
+#:def fytest_reset_current_test_suite()
+#:mute
+#:global fytest_current_suite
+#:set fytest_current_suite = {}
+#:endmute
+#:enddef
+
+
+#! Renders test driver
+#!
+#:def fytest_render_test_driver()
+program fytest_test_driver
+  use fytest_lib
+  #:for SUITE_NAME in fytest_suite_names
+    use fytest_suite_wrapper_${SUITE_NAME}$
+  #:endfor
+  implicit none
+
+  type(fytest_SuiteContainer), allocatable :: fytest_suiteContainers(:)
+  type(fytest_SuiteParams), allocatable :: fytest_suites(:)
+  type(fytest_TestContainer), allocatable :: fytest_testContainers(:)
+  type(fytest_Timer) :: fytest_testTimer
+  type(fytest_TestLogger) :: fytest_logger
+
+  call fytest_getSuiteContainers(fytest_suiteContainers)
+  call fytest_testTimer%start()
+  call fytest_initializeSuites(fytest_suiteContainers)
+  call fytest_getSuiteInfos(fytest_suiteContainers, fytest_suites)
+  call fytest_getFlatTestArray(fytest_suites, fytest_testContainers)
+  call fytest_runTests(fytest_testContainers, fytest_logger)
+  call fytest_finalizeSuites(fytest_suiteContainers)
+  call fytest_testTimer%stop()
+  call fytest_generateFinalReport(fytest_testContainers, fytest_logger, fytest_testTimer)
+
+contains
+
+  subroutine fytest_getSuiteContainers(suiteContainers)
+    type(fytest_SuiteContainer), intent(out), allocatable :: suiteContainers(:)
+
+    allocate(suiteContainers(${len(fytest_suite_names)}$))
+    #:for SUITE_IND, SUITE_NAME in enumerate(fytest_suite_names)
+      call fytest_getSuiteContainer_${SUITE_NAME}$(suiteContainers(${SUITE_IND + 1}$))
+    #:endfor
+
+  end subroutine fytest_getSuiteContainers
+
+end program fytest_test_driver
+#:enddef fytest_render_test_driver
+
+
+#! Renders the code for the REQUIRE macro
+#!
+#! Args:
+#!     COND: Condition in the REQUIRE macro.
+#!
+#:def fytest_render_require(COND)
+if (.not. (${COND}$)) then
+  fytest_testRes%testStatus = fytest_TestStatus%testFailed
+  fytest_testRes%line = ${_LINE_}$
+  fytest_testRes%errorMsg = "${COND}$"
+  return
+end if
+#:enddef
+
+
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#!!!  Library
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+#! Renders the test backend library
+#!
+#:def fytest_render_test_library()
+module fytest_lib
+  use, intrinsic :: iso_fortran_env
+  implicit none
+  private
+
+  public :: fytest_SuiteContainer, fytest_SuiteParams
+  public :: fytest_FixtureParams
+  public :: fytest_TestContainer, fytest_TestResult, fytest_TestStatus
+  public :: fytest_Timer, fytest_TestLogger
+  public :: fytest_initializeSuites, fytest_finalizeSuites, fytest_getSuiteInfos
+  public :: fytest_getFlatTestArray, fytest_runTests
+  public :: fytest_generateFinalReport
+
+
+  type :: TestStatusHelper
+    integer :: testSucceded = 1
+    integer :: testFailed = 2
+    integer :: testSkipped = 3
+  end type TestStatusHelper
+
+  type(TestStatusHelper), parameter :: fytest_TestStatus = TestStatusHelper()
+
+  character(10), parameter :: statusChars(3) = [character(10) :: "Success", "FAILED", "Skipped"]
+
+
+  type :: fytest_TestResult
+    integer :: testStatus
+    character(:), allocatable :: errorMsg
+    integer :: line
+  end type fytest_TestResult
+
+
+  abstract interface
+    subroutine testRunnerIface(testName, testParams, testResult)
+      import :: fytest_TestResult
+      character(*), intent(in) :: testName
+      integer, intent(in) :: testParams(:)
+      type(fytest_TestResult), intent(out) :: testResult
+    end subroutine testRunnerIface
+  end interface
+
+
+  type :: VarChar
+    character(:), allocatable :: str
+  end type VarChar
+
+
+  type :: fytest_FixtureParams
+    character(:), allocatable :: name
+    type(VarChar), allocatable :: tests(:)
+    integer, allocatable :: paramBounds(:,:)
+    procedure(testRunnerIface), pointer, nopass :: testRunner => null()
+  end type fytest_FixtureParams
+
+
+  type :: fytest_SuiteParams
+    character(:), allocatable :: name
+    character(:), allocatable :: fileName
+    type(fytest_FixtureParams), allocatable :: fixtures(:)
+  end type fytest_SuiteParams
+
+
+  abstract interface
+    subroutine suiteBuilderIface()
+    end subroutine suiteBuilderIface
+
+    subroutine suiteParamGetterIface(suite)
+      import :: fytest_SuiteParams
+      type(fytest_SuiteParams), intent(out) :: suite
+    end subroutine suiteParamGetterIface
+  end interface
+
+
+  type :: fytest_SuiteContainer
+    character(:), allocatable :: name
+    procedure(SuiteBuilderIface), pointer, nopass :: suiteInitializer => null()
+    procedure(SuiteBuilderIface), pointer, nopass :: suiteFinalizer => null()
+    procedure(SuiteParamGetterIface), pointer, nopass :: suiteParamGetter => null()
+  end type fytest_SuiteContainer
+
+
+  type :: fytest_TestContainer
+    character(:), allocatable :: fileName, suiteName, fixtureName, testName
+    integer, allocatable :: testParams(:)
+    procedure(testRunnerIface), pointer, nopass :: testRunner => null()
+    type(fytest_TestResult) :: testResult
+  end type fytest_TestContainer
+
+
+  type :: fytest_TestLogger
+    integer :: fdOut = output_unit
+  contains
+    procedure :: logTestRun => fytest_TestLogger_logTestRun
+    procedure :: logTestResult => fytest_TestLogger_logTestResult
+    procedure :: logFailedTest => fytest_TestLogger_logFailedTest
+    procedure :: logStatus => fytest_TestLogger_logStatus
+    procedure :: logTestStatistics => fytest_TestLogger_logTestStatistics
+  end type fytest_TestLogger
+
+
+  type :: fytest_Timer
+    integer :: startCount, endCount, countRate
+    real :: startTime, endTime
+  contains
+    procedure :: start => fytest_Timer_start
+    procedure :: stop => fytest_Timer_stop
+    procedure :: getCpuTime => fytest_Timer_getCpuTime
+    procedure :: getWallClockTime => fytest_Timer_getWallClockTime
+  end type fytest_Timer
+
+
+contains
+
+  subroutine fytest_initializeSuites(suiteContainers)
+    type(fytest_SuiteContainer), intent(in) :: suiteContainers(:)
+
+    integer :: iSuite
+
+    do iSuite = 1, size(suiteContainers)
+      if (associated(suiteContainers(iSuite)%suiteInitializer)) then
+        call suiteContainers(iSuite)%suiteInitializer()
+      end if
+    end do
+
+  end subroutine fytest_initializeSuites
+
+
+  subroutine fytest_finalizeSuites(suiteContainers)
+    type(fytest_SuiteContainer), intent(in) :: suiteContainers(:)
+
+    integer :: iSuite
+
+    do iSuite = 1, size(suiteContainers)
+      if (associated(suiteContainers(iSuite)%suiteFinalizer)) then
+        call suiteContainers(iSuite)%suiteFinalizer()
+      end if
+    end do
+
+  end subroutine fytest_finalizeSuites
+
+
+  subroutine fytest_getSuiteInfos(suiteContainers, suites)
+    type(fytest_SuiteContainer), intent(in) :: suiteContainers(:)
+    type(fytest_SuiteParams), allocatable, intent(out) :: suites(:)
+
+    integer :: iSuite, nSuites
+
+    nSuites = size(suiteContainers)
+    allocate(suites(nSuites))
+    do iSuite = 1, nSuites
+      call suiteContainers(iSuite)%suiteParamGetter(suites(iSuite))
+    end do
+
+  end subroutine fytest_getSuiteInfos
+
+
+  subroutine fytest_TestContainer_initialize(this, suite, fixture, iTest, iParamTest)
+    type(fytest_TestContainer), intent(out) :: this
+    type(fytest_SuiteParams), intent(in) :: suite
+    type(fytest_FixtureParams), intent(in) :: fixture
+    integer, intent(in) :: iTest
+    integer, intent(in) :: iParamTest
+
+    this%fileName = suite%fileName
+    this%suiteName = suite%name
+    this%fixtureName = fixture%name
+    this%testName = fixture%tests(iTest)%str
+    this%testRunner => fixture%testRunner
+    if (iParamTest > 0) then
+      this%testParams = getParams(iParamTest, fixture%paramBounds)
+    else
+      this%testParams = [integer ::]
+    end if
+
+  end subroutine fytest_TestContainer_initialize
+
+
+  subroutine fytest_getFlatTestArray(suites, testContainers)
+    type(fytest_SuiteParams), intent(in) :: suites(:)
+    type(fytest_TestContainer), allocatable, intent(out) :: testContainers(:)
+
+    integer :: iSuite, iFixture, iTest, nParamTests, iParam, ind
+    integer :: nAllTests
+
+    nAllTests = 0
+    do iSuite = 1, size(suites)
+      associate (suite => suites(iSuite))
+        do iFixture = 1, size(suite%fixtures)
+          associate (fixture => suite%fixtures(iFixture))
+            do iTest = 1, size(fixture%tests)
+              if (size(fixture%paramBounds) > 0) then
+                nParamTests = product(fixture%paramBounds(2, :) - fixture%paramBounds(1, :) + 1)
+              else
+                nParamTests = 1
+              end if
+              nAllTests = nAllTests + nParamTests
+            end do
+          end associate
+        end do
+      end associate
+    end do
+
+    allocate(testContainers(nAllTests))
+
+    ind = 1
+    do iSuite = 1, size(suites)
+      associate (suite => suites(iSuite))
+        do iFixture = 1, size(suite%fixtures)
+          associate (fixture => suite%fixtures(iFixture))
+            do iTest = 1, size(fixture%tests)
+              if (size(fixture%paramBounds) > 0) then
+                nParamTests = product(fixture%paramBounds(2, :) - fixture%paramBounds(1, :) + 1)
+                do iParam = 1, nParamTests
+                  call fytest_TestContainer_initialize(testContainers(ind), suite, fixture,&
+                      & iTest, iParam)
+                  ind = ind + 1
+                end do
+              else
+                call fytest_TestContainer_initialize(testContainers(ind), suite, fixture, iTest, 0)
+                ind = ind + 1
+              end if
+            end do
+          end associate
+        end do
+      end associate
+    end do
+
+  end subroutine fytest_getFlatTestArray
+
+
+  subroutine fytest_runTests(testContainers, logger)
+    type(fytest_TestContainer), intent(inout) :: testContainers(:)
+    type(fytest_TestLogger), intent(in) :: logger
+
+    integer :: iTest
+
+    do iTest = 1, size(testContainers)
+      call logger%logTestRun(testContainers(iTest))
+      testContainers(iTest)%testResult%testStatus = fytest_TestStatus%testSucceded
+      call testContainers(iTest)%testRunner(testContainers(iTest)%testName,&
+          & testContainers(iTest)%testParams, testContainers(iTest)%testResult)
+      call logger%logTestResult(testContainers(iTest))
+    end do
+
+  end subroutine fytest_runTests
+
+
+  subroutine fytest_generateFinalReport(testContainers, logger, timer)
+    type(fytest_TestContainer), intent(in) :: testContainers(:)
+    type(fytest_TestLogger), intent(in) :: logger
+    type(fytest_Timer), intent(in) :: timer
+
+    integer :: totals(3)
+    integer :: iTest
+
+    totals(:) = 0
+    do iTest = 1, size(testContainers)
+      associate (test => testContainers(iTest))
+        totals(test%testResult%testStatus) = totals(test%testResult%testStatus) + 1
+        if (test%testResult%testStatus == fytest_TestStatus%testFailed) then
+          call logger%logFailedTest(test)
+        end if
+      end associate
+    end do
+    call logger%logTestStatistics(totals, timer)
+
+  end subroutine fytest_generateFinalReport
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!  TestLogger
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  subroutine fytest_TestLogger_logStatus(this, status, msg)
+    class(fytest_TestLogger), intent(in) :: this
+    character(*), intent(in) :: status
+    character(*), intent(in) :: msg
+
+    write(this%fdOut, "('[ ', A, T11, ' ] ', A)") trim(status), trim(msg)
+
+  end subroutine fytest_TestLogger_logStatus
+
+
+  subroutine fytest_TestLogger_logTestRun(this, test)
+    class(fytest_TestLogger), intent(in) :: this
+    type(fytest_TestContainer), intent(in) :: test
+
+    call this%logStatus('Running',&
+        & trim(getFullTestName(test%suiteName, test%testName, test%testParams)))
+
+  end subroutine fytest_TestLogger_logTestRun
+
+
+  subroutine fytest_TestLogger_logTestResult(this, test)
+    class(fytest_TestLogger), intent(in) :: this
+    type(fytest_TestContainer), intent(in) :: test
+
+    call this%logStatus(trim(statusChars(test%testResult%testStatus)),&
+        & trim(getFullTestName(test%suiteName, test%testName, test%testParams)))
+
+  end subroutine fytest_TestLogger_logTestResult
+
+
+  subroutine fytest_TestLogger_logFailedTest(this, test)
+    class(fytest_TestLogger), intent(in) :: this
+    type(fytest_TestContainer), intent(in) :: test
+
+    write(this%fdOut, "(/, A, 1X, T20, A)") 'FAILING TEST:',&
+        & trim(getFullTestName(test%suiteName, test%testName, test%testParams))
+    write(this%fdOut, "(A, T20, 2A, I0)") 'Failed at: ', test%fileName, ':', test%testResult%line
+    write(this%fdOut, "(A, T20, A)") 'Failing condition: ', test%testResult%errorMsg
+
+  end subroutine fytest_TestLogger_logFailedTest
+
+
+  subroutine fytest_TestLogger_logTestStatistics(this, totals, timer)
+    class(fytest_TestLogger), intent(in) :: this
+    integer, intent(in) :: totals(:)
+    class(fytest_Timer), intent(in) :: timer
+
+    real :: wallClockTime, cpuTime
+
+    wallClockTime = timer%getWallClockTime()
+    cpuTime = timer%getCpuTime()
+
+    if (wallClockTime < 1.0) then
+      write(this%fdOut, "(/, A, I0, A, I0, A)") 'Run ', sum(totals), ' tests in ',&
+          & int(wallClockTime * 1000.0), ' ms.'
+    else
+      write(this%fdOut, "(/, A, I0, A, F0.3, A)") 'Run ', sum(totals), ' tests in ',&
+          & wallClockTime, ' s'
+    end if
+    write(this%fdOut, "(3(A, I0), A)") 'Passed: ', totals(fytest_TestStatus%testSucceded),&
+        & ', Failed: ', totals(fytest_TestStatus%testFailed), &
+        & ', Skipped: ', totals(fytest_TestStatus%testSkipped), '.'
+
+  end subroutine fytest_TestLogger_logTestStatistics
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!  Timer
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+  !> Starts the timer.
+  subroutine fytest_Timer_start(this)
+    class(fytest_Timer), intent(inout) :: this
+
+    call cpu_time(this%startTime)
+    call system_clock(count=this%startCount, count_rate=this%countRate)
+
+  end subroutine fytest_Timer_start
+
+
+  !> Stops the timer.
+  subroutine fytest_Timer_stop(this)
+    class(fytest_Timer), intent(inout) :: this
+
+    call cpu_time(this%endTime)
+    call system_clock(count=this%endCount)
+
+  end subroutine fytest_Timer_stop
+
+
+  !> Returns the measured CPU time
+  function fytest_Timer_getCpuTime(this) result(cpuTime)
+    class(fytest_Timer), intent(in) :: this
+    real :: cpuTime
+
+    cpuTime = this%endTime - this%startTime
+
+  end function fytest_Timer_getCpuTime
+
+
+  !> Returns the measured wall clock time.
+  function fytest_Timer_getWallClockTime(this) result(wallClockTime)
+    class(fytest_Timer), intent(in) :: this
+    real :: wallClockTime
+
+    if (this%countRate == 0) then
+      wallClockTime = 0.0
+    else
+      wallClockTime = real(this%endCount - this%startCount) / real(this%countRate)
+    end if
+
+  end function fytest_Timer_getWallClockTime
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!  Helper functions
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  function getParams(ind, paramBounds) result(params)
+    integer, intent(in) :: ind
+    integer, intent(in) :: paramBounds(:,:)
+    integer :: params(size(paramBounds, dim=2))
+
+    integer :: nParams(size(paramBounds, dim=2))
+    integer :: ind0, divisor, iParam
+
+    nParams(:) = paramBounds(2, :) - paramBounds(1, :) + 1
+    ind0 = ind - 1
+    divisor = product(nParams)
+    do iParam = size(paramBounds, dim=2), 2, -1
+      divisor = divisor / nParams(iParam)
+      params(iParam) = ind0 / divisor
+      ind0 = ind0 - divisor * params(iParam)
+    end do
+    params(1) = ind0
+    params(:) = params + 1
+
+  end function getParams
+
+
+  function getTestParamStr(testParams) result(paramStr)
+    integer, intent(in) :: testParams(:)
+    character(100) :: paramStr
+
+    character(100) :: formatStr
+
+    if (size(testParams) == 1) then
+      write(paramStr, "(I0)") testParams(1)
+    else
+      write(formatStr, "(A,I0,A)") "(", size(testParams) - 1, "(I0,', '),I0)"
+      write(paramStr, formatStr) testParams
+    end if
+
+  end function getTestParamStr
+
+
+  function getFullTestName(suiteName, testName, testParams) result(fullTestName)
+    character(*), intent(in) :: suiteName
+    character(*), intent(in) :: testName
+    integer, intent(in) :: testParams(:)
+    character(100) :: fullTestName
+
+    if (size(testParams) > 0) then
+      write(fullTestName, "(A, ' / ', A, ' (', A, ') ')")  trim(suiteName), trim(testName),&
+          & trim(getTestParamStr(testParams))
+    else
+      write(fullTestName, "(A, ' / ', A)") trim(suiteName), trim(testName)
+    end if
+
+  end function getFullTestName
+
+
+end module fytest_lib
+#:enddef fytest_render_test_library
+
+
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#!!!  Macros
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+#! Checks the fulfillment of a given condition.
+#!
+#! If the condition evalutes to .false. the test will be registered as failed and no further code
+#! in that test is executed, except for the optional fixture finalizer. If the condition evaluates
+#! to .true., test execution is continued.
+#!
+#! Args:
+#!     COND: Condition to be fulfilled.
+#!
+#:def REQUIRE(COND)
+$:fytest_render_require(COND)
+#:enddef REQUIRE
+
+
+#! Defines a test case.
+#!
+#! Args:
+#!     NAME: Name of the test
+#!     IMPLEMENTATION: Test implementation
+#!     FIXTURE: Optional test fixture
+#!
+#:def TEST(NAME, IMPLEMENTATION, FIXTURE='default')
+#:mute
+$:fytest_register_test(NAME, IMPLEMENTATION, FIXTURE)
+#:endmute
+#:enddef TEST
+
+
+#! Defines a test suite.
+#!
+#! Args:
+#!     NAME: Name of the test
+#!     SPECIFICATION: Specification  part of the test suite
+#!     IMPLEMENTATION: Test implementation
+#!
+#:def TEST_SUITE(NAME, SPECIFICATION, IMPLEMENTATION)
+#:mute
+$:fytest_register_test_suite(NAME)
+#:endmute
+$:fytest_render_test_suite(NAME, SPECIFICATION, IMPLEMENTATION)
+#:mute
+$:fytest_reset_current_test_suite()
+#:endmute
+#:enddef
+
+
+#! Generates driver code for the test suites.
+#!
+#! Note: It can only drive those test suites which were generated in the same file.
+#!
+#:def TEST_DRIVER()
+$:fytest_render_test_driver()
+#:enddef TEST_DRIVER
+
+
+#! Defines a test fixture.
+#!
+#! Args:
+#!    NAME: Name of the test fixture
+#!    SPECIFICATION: Specification part of the fixture
+#!    IMPLEMENTATION: Implementation part of the fixture
+#!    PARAMETERS: Optional list of (parameter_name, parameter_array) tuples, where
+#!        parameter_name is the name of the iterator variable and parameter_array is
+#!        the array it will iterate over.
+#!
+#:def TEST_FIXTURE(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS=None)
+$:fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS)
+#:enddef TEST_FIXTURE
+
+
+#! Defines a test fixture initializer.
+#!
+#! Args:
+#!     IMPLEMENTATION: Test fixture initializer implementation
+#!
+#:def TEST_FIXTURE_INITIALIZER(IMPLEMENTATION)
+$:fytest_register_test_fixture_initializer(IMPLEMENTATION)
+#:enddef TEST_FIXTURE_INITIALIZER
+
+
+#! Defines a test fixture finalizer.
+#!
+#! Args:
+#!     IMPLEMENTATION: Test fixture finalizer implementation
+#!
+#:def TEST_FIXTURE_FINALIZER(IMPLEMENTATION)
+$:fytest_register_test_fixture_finalizer(IMPLEMENTATION)
+#:enddef TEST_FIXTURE_FINALIZER
+
+
+#! Defines a test suite initializer.
+#!
+#! Args:
+#!     IMPLEMENTATION: Test suite initializer implementation
+#!
+#:def TEST_SUITE_INITIALIZER(IMPLEMENTATION)
+$:fytest_register_test_suite_initializer(IMPLEMENTATION)
+#:enddef TEST_SUITE_INITIALIZER
+
+
+#! Defines a test suite finalizer.
+#!
+#! Args:
+#!     IMPLEMENTATION: Test suite finalizer implementation
+#!
+#:def TEST_SUITE_FINALIZER(IMPLEMENTATION)
+$:fytest_register_test_suite_finalizer(IMPLEMENTATION)
+#:enddef TEST_SUITE_FINALIZER
+
+
+#! Renders the backend library needed for FyTest.
+#!
+#:def TEST_LIBRARY()
+$:fytest_render_test_library()
+#:enddef TEST_LIBRARY
+
+
 #:endmute
