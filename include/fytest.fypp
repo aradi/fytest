@@ -97,9 +97,9 @@ $:fytest_render_test_driver()
 #!        parameter_name is the name of the iterator variable and parameter_array is
 #!        the array it will iterate over.
 #!
-#:def TEST_FIXTURE(NAME, SPECIFICATION, IMPLEMENTATION='', PARAMETERS=None)
+#:def TEST_FIXTURE(NAME, SPECIFICATION, IMPLEMENTATION='', PARAMETERS=None, RENDERER=None)
 #:mute
-$:fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS)
+$:fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS, RENDERER)
 #:endmute
 #:enddef TEST_FIXTURE
 
@@ -227,7 +227,7 @@ $:fytest_registered_test_marker
 #!     IMPLEMENTATION: Implementation of the fixture
 #!     PARAMETERS: Parameters to make parameterized tests.
 #!
-#:def fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS)
+#:def fytest_register_fixture(NAME, SPECIFICATION, IMPLEMENTATION, PARAMETERS, RENDERER)
 #:mute
 
 #:global fytest_fixtures
@@ -242,6 +242,7 @@ $:fytest_fixtures.update([(NAME, {&
     & "specification": SPECIFICATION.strip(),&
     & "implementation": IMPLEMENTATION.strip(),&
     & "parameters": PARAMETERS,&
+    & "renderer": RENDERER,&
     & "tests": fytest_test_names[len(fytest_test_names) - nr_tests_in_fixture :]&
     & })])
 #:set fytest_test_names = fytest_test_names[: len(fytest_test_names) - nr_tests_in_fixture]
@@ -486,6 +487,12 @@ contains
         call fytest_initializeFixture()
       #:endif
 
+      #:if FIXTURE.get("renderer") is not None
+        testResult%fixtureStr = trim(${FIXTURE["renderer"]}$())
+      #:else
+        testResult%fixtureStr = ""
+      #:endif
+
       select case (testname)
       #:for TEST_NAME in FIXTURE["tests"]
         case ("${TEST_NAME}$")
@@ -655,6 +662,7 @@ module fytest_lib
 
   type :: fytest_TestResult
     integer :: testStatus
+    character(:), allocatable :: fixtureStr
     character(:), allocatable :: errorMsg
     integer :: line
   end type fytest_TestResult
@@ -926,7 +934,8 @@ contains
     type(fytest_TestContainer), intent(in) :: test
 
     call this%logStatus(trim(statusChars(test%testResult%testStatus)),&
-        & trim(getFullTestName(test%suiteName, test%testName, test%testParams)))
+        & trim(getFullTestName(test%suiteName, test%testName, test%testParams,&
+        & test%testResult%FixtureStr)))
 
   end subroutine fytest_TestLogger_logTestResult
 
@@ -936,7 +945,8 @@ contains
     type(fytest_TestContainer), intent(in) :: test
 
     write(this%fdOut, "(/, A, 1X, T20, A)") 'FAILING TEST:',&
-        & trim(getFullTestName(test%suiteName, test%testName, test%testParams))
+        & trim(getFullTestName(test%suiteName, test%testName, test%testParams,&
+        & test%testResult%fixtureStr))
     write(this%fdOut, "(A, T20, 2A, I0)") 'Failed at: ', test%fileName, ':', test%testResult%line
     write(this%fdOut, "(A, T20, A)") 'Failing condition: ', test%testResult%errorMsg
 
@@ -1058,17 +1068,26 @@ contains
   end function getTestParamStr
 
 
-  function getFullTestName(suiteName, testName, testParams) result(fullTestName)
+  function getFullTestName(suiteName, testName, testParams, fixtureStr) result(fullTestName)
     character(*), intent(in) :: suiteName
     character(*), intent(in) :: testName
     integer, intent(in) :: testParams(:)
+    character(:), allocatable, intent(in), optional :: fixtureStr
     character(100) :: fullTestName
 
+    character(:), allocatable :: fixtureStrSuffix
+
+    fixtureStrSuffix = ''
+    if (present(fixtureStr)) then
+      if (len(fixtureStr) > 0) then
+        fixtureStrSuffix = ' {' // fixtureStr // '}'
+      end if
+    end if
     if (size(testParams) > 0) then
-      write(fullTestName, "(A, ' / ', A, ' (', A, ') ')")  trim(suiteName), trim(testName),&
-          & trim(getTestParamStr(testParams))
+      write(fullTestName, "(A, '/', A, '(', A, ')', A)")  trim(suiteName),&
+          & trim(testName), trim(getTestParamStr(testParams)), fixtureStrSuffix
     else
-      write(fullTestName, "(A, ' / ', A)") trim(suiteName), trim(testName)
+      write(fullTestName, "(A, '/', A, A)") trim(suiteName), trim(testName), fixtureStrSuffix
     end if
 
   end function getFullTestName
