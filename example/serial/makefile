@@ -1,7 +1,7 @@
 .SUFFIXES:
 .SUFFIXES: .f90 .fpp .o .fypp
 
-TARGETS = test_simple test_full
+TARGETS = test_simple test_fixture test_full
 
 .PHONY: all
 all: $(TARGETS)
@@ -22,6 +22,13 @@ test_simple: test_simple.o factorial.o fytest_lib.o
 	 $(LN) $(LNOPT) -o $@ $^
 
 test_simple.o: factorial.o fytest_lib.o
+
+
+test_fixture: test_fixture.o factorial.o fytest_lib.o
+	$(LN) $(LNOPT) -o $@ $^
+
+test_fixture.o: factorial.o fytest_lib.o
+
 
 test_full: test_full.o factorial.o fytest_lib.o
 	$(LN) $(LNOPT) -o $@ $^

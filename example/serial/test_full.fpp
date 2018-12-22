@@ -1,6 +1,6 @@
 #:include 'fytest.fypp'
 
-#:block TEST_SUITE('factorial')
+#:block TEST_SUITE('full')
   use factorial_module
   implicit none
 

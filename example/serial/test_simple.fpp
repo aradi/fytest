@@ -1,6 +1,8 @@
+#! Demonstrates the usage of simple tests.
+
 #:include 'fytest.fypp'
 
-#:block TEST_SUITE('factorial')
+#:block TEST_SUITE('simple')
   use factorial_module
   implicit none
 

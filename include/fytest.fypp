@@ -424,6 +424,8 @@ module fytest_suite_${NAME}$
 
   $:fytest_current_suite["specification"]
 
+  public :: fytest_getSuiteContainer_${NAME}$
+  
 contains
 
   $:fytest_current_suite["implementation"]
@@ -598,18 +600,6 @@ contains
 end module fytest_suite_${NAME}$
 
 
-!
-! Test suite wrapper module ${NAME}$
-!
-module fytest_suite_wrapper_${NAME}$
-  use fytest_suite_${NAME}$
-  implicit none
-  private
-
-  public :: fytest_getSuiteContainer_${NAME}$
-
-end module fytest_suite_wrapper_${NAME}$
-
 #:enddef fytest_render_current_test_suite
 
 
@@ -621,38 +611,37 @@ end module fytest_suite_wrapper_${NAME}$
 !
 program fytest_test_driver
   use fytest_lib
-  #:for SUITE_NAME in fytest_suite_names
-    use fytest_suite_wrapper_${SUITE_NAME}$
-  #:endfor
-  implicit none
 
-  type(fytest_SuiteContainer), allocatable :: fytest_suiteContainers(:)
-  type(fytest_Suite), allocatable :: fytest_suites(:)
-  type(fytest_TestContainer), allocatable :: fytest_testContainers(:)
-  type(fytest_Timer) :: fytest_testTimer
-  type(fytest_TestLogger) :: fytest_logger
-
-  call fytest_getSuiteContainers(fytest_suiteContainers)
-  call fytest_testTimer%start()
-  call fytest_initSuites(fytest_suiteContainers)
-  call fytest_getSuites(fytest_suiteContainers, fytest_suites)
-  call fytest_getFlatTestArray(fytest_suites, fytest_testContainers)
-  call fytest_runTests(fytest_testContainers, fytest_logger)
-  call fytest_finalSuites(fytest_suiteContainers)
-  call fytest_testTimer%stop()
-  call fytest_generateFinalReport(fytest_testContainers, fytest_logger, fytest_testTimer)
+  call fytest_runTestDriver()
 
 contains
 
-  subroutine fytest_getSuiteContainers(suiteContainers)
-    type(fytest_SuiteContainer), intent(out), allocatable :: suiteContainers(:)
+  subroutine fytest_runTestDriver()
+    #:for SUITE_NAME in fytest_suite_names
+      use fytest_suite_${SUITE_NAME}$, only : fytest_getSuiteContainer_${SUITE_NAME}$
+    #:endfor
+    implicit none
+
+    type(fytest_SuiteContainer), allocatable :: suiteContainers(:)
+    type(fytest_Suite), allocatable :: suites(:)
+    type(fytest_TestContainer), allocatable :: testContainers(:)
+    type(fytest_Timer) :: testTimer
+    type(fytest_TestLogger) :: logger
 
     allocate(suiteContainers(${len(fytest_suite_names)}$))
     #:for SUITE_IND, SUITE_NAME in enumerate(fytest_suite_names)
       call fytest_getSuiteContainer_${SUITE_NAME}$(suiteContainers(${SUITE_IND + 1}$))
     #:endfor
+    call testTimer%start()
+    call fytest_initSuites(suiteContainers)
+    call fytest_getSuites(suiteContainers, suites)
+    call fytest_getFlatTestArray(suites, testContainers)
+    call fytest_runTests(testContainers, logger)
+    call fytest_finalSuites(suiteContainers)
+    call testTimer%stop()
+    call fytest_generateFinalReport(testContainers, logger, testTimer)
 
-  end subroutine fytest_getSuiteContainers
+  end subroutine fytest_runTestDriver
 
 end program fytest_test_driver
 #:enddef fytest_render_test_driver
