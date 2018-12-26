@@ -3,7 +3,7 @@
 #:include 'fytest.fypp'
 
 #:block TEST_SUITE('simple')
-  use factorial_module
+  use mymath
   implicit none
 
 #:contains

@@ -1,24 +1,28 @@
-#! Demonstrates the usage of test fixtures and test suite initializers.
+#! Demonstrates the usage of parameterized test fixtures.
 
 #:include 'fytest.fypp'
 
-#:block TEST_SUITE('fixture')
+#:block TEST_SUITE('parameterized')
   use mymath
   implicit none
 
 #:contains
 
-  #! Using the test suite initializer to initialize the seed
+#! We use the test suite initializer to initialize the seed
   #! Note: This routine is called once before any tests are executed.
   #:block TEST_SUITE_INIT
     call random_seed()
   #:endblock
 
-  #! Testing for various special factorial values
 
-  #:block TEST_FIXTURE('random', RENDERER='render')
+  #! Parameterized test, iterator runs over the range from 1 to 10.
 
-    #! Variables defined here can be accessed by each unit within the fixture
+  #:block TEST_FIXTURE('random', ITERATORS=[('iter', 10)], RENDERER='render')
+
+    #! Iterator variables must be declared in the fixture scope
+    integer :: iter
+
+    #! Some other fixture variable
     integer :: curval
 
   #:contains

@@ -1,5 +1,5 @@
-!> Contains a simple routine to calculate factorial.
-module factorial_module
+!> Contains trivial mathemtical routines for demonstration purposes.
+module mymath
   implicit none
   private
 
@@ -25,5 +25,4 @@ contains
 
   end function factorial
 
-
-end module factorial_module
+end module mymath

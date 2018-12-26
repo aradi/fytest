@@ -1,7 +1,7 @@
 #:include 'fytest.fypp'
 
 #:block TEST_SUITE('full')
-  use factorial_module
+  use mymath
   implicit none
 
   integer :: special_value = 5

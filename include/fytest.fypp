@@ -79,9 +79,11 @@ $:fytest_register_test_suite_final(IMPLEMENTATION)
 #!>    NAME: Name of the test fixture
 #!>    SPECIFICATION: Specification part of the fixture
 #!>    IMPLEMENTATION: Implementation part of the fixture
-#!>    ITERATORS: Optional list of (iterator_name, iterated_array) tuples, where
-#!>        iterator_name is the name of an iterator variable and iterated_array is
-#!>        the array it will iterate over.
+#!>    ITERATORS: Optional list of (iterator_name, iterated_array) or (iterator_name, range_tuple)
+#!>        tuples, where iterator_name is the name of an iterator variable and iterated_array is
+#!>        the array it will iterate over. If range_tuple is defined, it can have the forms
+#!>        (to,), (from, to), with from and to being inclusive boundaries
+#!>        of the iterations.
 #!>    RENDERER: Optional name of subroutine used to render the name of the test case.
 #!>
 #:def TEST_FIXTURE(NAME, SPECIFICATION, IMPLEMENTATION='', ITERATORS=None, RENDERER=None)
@@ -269,6 +271,7 @@ $:fytest_test_case_marker
 
 #:set nr_tests_in_fixture = IMPLEMENTATION.count(fytest_test_case_marker)
 #:set IMPLEMENTATION = IMPLEMENTATION.replace(fytest_test_case_marker, '')
+
 $:fytest_fixtures.update([(NAME, {&
     & "init": fytest_current_fixture.get("init"),&
     & "final": fytest_current_fixture.get("final"),&
@@ -492,8 +495,13 @@ contains
         #:set FIXTURE_ITERATORS = [] if FIXTURE_ITERATORS is None else FIXTURE_ITERATORS
         allocate(fixture%paramBounds(2, ${len(FIXTURE_ITERATORS)}$))
         #:for IPARAM, FIXTURE_PARAM in enumerate(FIXTURE_ITERATORS)
-          fixture%paramBounds(1, ${IPARAM + 1}$) = lbound(${FIXTURE_PARAM[1]}$, dim=1)
-          fixture%paramBounds(2, ${IPARAM + 1}$) = ubound(${FIXTURE_PARAM[1]}$, dim=1)
+          #:if isinstance(FIXTURE_PARAM[1], str)
+            fixture%paramBounds(1, ${IPARAM + 1}$) = lbound(${FIXTURE_PARAM[1]}$, dim=1)
+            fixture%paramBounds(2, ${IPARAM + 1}$) = ubound(${FIXTURE_PARAM[1]}$, dim=1)
+          #:elif isinstance(FIXTURE_PARAM[1], int)
+            fixture%paramBounds(1, ${IPARAM + 1}$) = 1
+            fixture%paramBounds(2, ${IPARAM + 1}$) = ${FIXTURE_PARAM[1]}$
+          #:endif
         #:endfor
         fixture%runTest => fytest_runFixturedTest_${FIXTURE_NAME}$
 
@@ -527,8 +535,12 @@ contains
           stop
         end if
         #:for IPARAM, FIXTURE_PARAM in enumerate(FIXTURE_ITERATORS)
-          #:set ITERATOR, ARRAY = FIXTURE_PARAM
-          ${ITERATOR}$ = ${ARRAY}$(testParams(${IPARAM + 1}$))
+          #:set ITERATOR, ITERVALUE = FIXTURE_PARAM
+          #:if isinstance(ITERVALUE, str)
+            ${ITERATOR}$ = ${ITERVALUE}$(testParams(${IPARAM + 1}$))
+          #:elif isinstance(ITERVALUE, int)
+            ${ITERATOR}$ = testParams(${IPARAM + 1}$)
+          #:endif
         #:endfor
 
       end subroutine fytest_setUpParams
@@ -674,6 +686,9 @@ end if
 #:endif
 #:endmute
 #:enddef
+
+
+#!#:def fytest_get_iterator_type(ITERATOR
 
 
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
