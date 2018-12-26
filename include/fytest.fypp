@@ -639,6 +639,7 @@ contains
     type(fytest_TestContainer), allocatable :: testContainers(:)
     type(fytest_Timer) :: testTimer
     type(fytest_TestLogger) :: logger
+    integer :: totals(fytest_nTestStatus)
 
     allocate(suiteContainers(${len(fytest_suite_names)}$))
     #:for SUITE_IND, SUITE_NAME in enumerate(fytest_suite_names)
@@ -651,7 +652,10 @@ contains
     call fytest_runTests(testContainers, logger)
     call fytest_finalSuites(suiteContainers)
     call testTimer%stop()
-    call fytest_generateFinalReport(testContainers, logger, testTimer)
+    call fytest_generateFinalReport(testContainers, logger, testTimer, totals)
+    if (totals(fytest_TestStatus%testFailed) > 0) then
+      stop 1
+    end if
 
   end subroutine fytest_runTestDriver
 
@@ -710,6 +714,7 @@ module fytest_lib
   public :: fytest_initSuites, fytest_finalSuites, fytest_getSuites
   public :: fytest_getFlatTestArray, fytest_runTests
   public :: fytest_generateFinalReport
+  public :: fytest_nTestStatus
 
 
   type :: TestStatusHelper
@@ -718,9 +723,12 @@ module fytest_lib
     integer :: testSkipped = 3
   end type TestStatusHelper
 
+  integer, parameter :: fytest_nTestStatus = 3
+
   type(TestStatusHelper), parameter :: fytest_TestStatus = TestStatusHelper()
 
-  character(10), parameter :: statusChars(3) = [character(10) :: "Success", "FAILED", "Skipped"]
+  character(10), parameter :: statusChars(fytest_nTestStatus) = [&
+      & character(10) :: "Success", "FAILED", "Skipped"]
 
 
   type :: fytest_TestResult
@@ -949,12 +957,12 @@ contains
   end subroutine fytest_runTests
 
 
-  subroutine fytest_generateFinalReport(testContainers, logger, timer)
+  subroutine fytest_generateFinalReport(testContainers, logger, timer, totals)
     type(fytest_TestContainer), intent(in) :: testContainers(:)
     type(fytest_TestLogger), intent(in) :: logger
     type(fytest_Timer), intent(in) :: timer
+    integer, intent(out) :: totals(fytest_nTestStatus)
 
-    integer :: totals(3)
     integer :: iTest
 
     totals(:) = 0

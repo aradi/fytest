@@ -8,7 +8,7 @@
 
 #:contains
 
-#! We use the test suite initializer to initialize the seed
+  #! We use the test suite initializer to initialize the seed
   #! Note: This routine is called once before any tests are executed.
   #:block TEST_SUITE_INIT
     call random_seed()
