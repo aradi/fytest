@@ -514,15 +514,15 @@ contains
 
   #:for FIXTURE_NAME, FIXTURE in fytest_fixtures.items()
     subroutine fytest_runFixturedTest_${FIXTURE_NAME}$(fytest_testname, fytest_testparams,&
-        & fytest_testRes)
+        & fytest_testCtx)
       character(*), intent(in) :: fytest_testname
       integer, intent(in) :: fytest_testparams(:)
-      type(fytest_TestResult), intent(out) :: fytest_testRes
+      type(fytest_TestContext), intent(out) :: fytest_testCtx
 
       $:FIXTURE.get("specification", '')
 
       call fytest_setUpParams(fytest_testparams)
-      call fytest_runTest(fytest_testname, fytest_testRes)
+      call fytest_runTest(fytest_testname, fytest_testCtx)
 
     contains
 
@@ -549,26 +549,29 @@ contains
       end subroutine fytest_setUpParams
 
 
-      subroutine fytest_runTest(testname, testResult)
+      subroutine fytest_runTest(testname, testContext)
         character(*), intent(in) :: testname
-        type(fytest_TestResult), intent(out) :: testResult
-
-        testResult%testStatus = fytest_testStatus%testSucceded
+        type(fytest_TestContext), intent(out) :: testContext
 
         #:if FIXTURE.get("init") is not None
-          call fytest_initFixture()
+          call testContext%setPhase(fytest_TestPhases%init)
+          call fytest_initFixture(testContext)
         #:endif
+        if (.not. testContext%isValid()) then
+          return
+        end if
 
         #:if FIXTURE.get("renderer") is not None
-          testResult%fixtureStr = trim(${FIXTURE["renderer"]}$())
+          call testContext%setFixtureStr(trim(${FIXTURE["renderer"]}$()))
         #:else
-          testResult%fixtureStr = ""
+          call testContext%setFixtureStr("")
         #:endif
 
+        call testContext%setPhase(fytest_TestPhases%test)
         select case (testname)
         #:for TEST_NAME in FIXTURE["tests"]
           case ("${TEST_NAME}$")
-            call fytest_runTest_${TEST_NAME}$(testResult)
+            call fytest_runTest_${TEST_NAME}$(testContext)
         #:endfor
         case default
           print *, 'ERROR: Invalid test name "', testname, '" in suite "${NAME}$", fixture&
@@ -577,30 +580,39 @@ contains
         end select
 
         #:if FIXTURE.get("final") is not None
-          call fytest_finalFixture()
+          call testContext%setPhase(fytest_TestPhases%final)
+          call fytest_finalFixture(testContext)
         #:endif
+
+        call testContext%setPhase(fytest_TestPhases%done)
 
       end subroutine fytest_runTest
 
 
       #:if FIXTURE.get("init") is not None
-        subroutine fytest_initFixture()
+        subroutine fytest_initFixture(fytest_context)
+          type(fytest_TestContext), intent(inout) :: fytest_context
+
           $:FIXTURE["init"]
+
         end subroutine fytest_initFixture
       #:endif
 
 
       #:if FIXTURE.get("final") is not None
-        subroutine fytest_finalFixture()
+        subroutine fytest_finalFixture(fytest_context)
+          type(fytest_TestContext), intent(inout) :: fytest_context
+
           $:FIXTURE["final"]
+
         end subroutine fytest_finalFixture
       #:endif
 
 
       #:for TEST_NAME in FIXTURE["tests"]
 
-        subroutine fytest_runTest_${TEST_NAME}$(fytest_testRes)
-          type(fytest_TestResult), intent(inout) :: fytest_testRes
+        subroutine fytest_runTest_${TEST_NAME}$(fytest_context)
+          type(fytest_TestContext), intent(inout) :: fytest_context
 
           ${fytest_tests[TEST_NAME]["implementation"]}$
 
@@ -672,10 +684,9 @@ end program fytest_test_driver
 #!     COND: Condition in the ASSERT macro.
 #!
 #:def fytest_render_assert(COND)
+#:set condstr = COND.replace('"', '""')
 if (.not. (${COND}$)) then
-  fytest_testRes%testStatus = fytest_TestStatus%testFailed
-  fytest_testRes%line = ${_LINE_}$
-  fytest_testRes%errorMsg = "${COND}$"
+  call fytest_context%signalizeFailure("${_FILE_}$", ${_LINE_}$, "Failing condition: ${condstr}$")
   return
 end if
 #:enddef
@@ -712,7 +723,8 @@ module fytest_lib
 
   public :: fytest_SuiteContainer, fytest_Suite
   public :: fytest_Fixture
-  public :: fytest_TestContainer, fytest_TestResult, fytest_TestStatus
+  public :: fytest_TestContainer, fytest_TestStatus
+  public :: fytest_TestContext, fytest_TestPhases
   public :: fytest_Timer, fytest_TestLogger
   public :: fytest_initSuites, fytest_finalSuites, fytest_getSuites
   public :: fytest_getFlatTestArray, fytest_runTests
@@ -734,20 +746,43 @@ module fytest_lib
       & character(10) :: "Success", "FAILED", "Skipped"]
 
 
-  type :: fytest_TestResult
-    integer :: testStatus
-    character(:), allocatable :: fixtureStr
-    character(:), allocatable :: errorMsg
+  type :: TestPhasesHelper
+    integer :: uninit = 0
+    integer :: init = 1
+    integer :: test = 2
+    integer :: final = 3
+    integer :: done = 4
+  end type TestPhasesHelper
+
+  type(TestPhasesHelper), parameter :: fytest_TestPhases = TestPhasesHelper()
+
+
+  type :: fytest_TestException
+    character(:), allocatable :: file
     integer :: line
-  end type fytest_TestResult
+    character(:), allocatable :: message
+  end type fytest_TestException
+
+
+  type :: fytest_TestContext
+    integer :: status = fytest_TestStatus%testSucceded
+    integer :: phase = fytest_TestPhases%uninit
+    character(:), allocatable :: fixtureStr
+    type(fytest_TestException), allocatable :: exceptions(:)
+  contains
+    procedure :: setPhase => fytest_TestContext_setPhase
+    procedure :: setFixtureStr => fytest_TestContext_setFixtureStr
+    procedure :: signalizeFailure => fytest_TestContext_signalizeFailure
+    procedure :: isValid => fytest_TestContext_isValid
+  end type fytest_TestContext
 
 
   abstract interface
-    subroutine testRunnerIface(testName, testParams, testResult)
-      import :: fytest_TestResult
+    subroutine testRunnerIface(testName, testParams, testContext)
+      import :: fytest_TestContext
       character(*), intent(in) :: testName
       integer, intent(in) :: testParams(:)
-      type(fytest_TestResult), intent(out) :: testResult
+      type(fytest_TestContext), intent(out) :: testContext
     end subroutine testRunnerIface
   end interface
 
@@ -798,7 +833,7 @@ module fytest_lib
     character(:), allocatable :: fileName, suiteName, fixtureName, testName
     integer, allocatable :: testParams(:)
     procedure(testRunnerIface), pointer, nopass :: runTest => null()
-    type(fytest_TestResult) :: testResult
+    type(fytest_TestContext) :: testContext
   end type fytest_TestContainer
 
 
@@ -890,6 +925,55 @@ contains
   end subroutine fytest_TestContainer_initialize
 
 
+  subroutine fytest_TestContext_setPhase(this, phase)
+    class(fytest_TestContext), intent(inout) :: this
+    integer, intent(in) :: phase
+
+    this%phase = phase
+
+  end subroutine fytest_TestContext_setPhase
+
+
+  subroutine fytest_TestContext_setFixtureStr(this, fixtureStr)
+    class(fytest_TestContext), intent(inout) :: this
+    character(*), intent(in) :: fixtureStr
+
+    this%fixtureStr = fixtureStr
+
+  end subroutine fytest_TestContext_setFixtureStr
+
+
+  subroutine fytest_TestContext_signalizeFailure(this, file, line, msg)
+    class(fytest_TestContext), intent(inout) :: this
+    character(*), intent(in) :: file
+    integer, intent(in) :: line
+    character(*), intent(in) :: msg
+
+    type(fytest_TestException) :: exception
+
+    #! Assertions during finalization are recorded but not considered as failure
+    if (this%phase /= fytest_TestPhases%final) then
+      this%status = fytest_TestStatus%testFailed
+    end if
+    exception = fytest_TestException(file, line, msg)
+    if (allocated(this%exceptions)) then
+      this%exceptions = [this%exceptions, exception]
+    else
+      this%exceptions = [exception]
+    end if
+
+  end subroutine fytest_TestContext_signalizeFailure
+
+
+  function fytest_TestContext_isValid(this) result(isValid)
+    class(fytest_TestContext), intent(in) :: this
+    logical :: isValid
+
+    isValid = (.not. allocated(this%exceptions))
+
+  end function fytest_TestContext_isValid
+
+
   subroutine fytest_getFlatTestArray(suites, testContainers)
     type(fytest_Suite), intent(in) :: suites(:)
     type(fytest_TestContainer), allocatable, intent(out) :: testContainers(:)
@@ -951,9 +1035,9 @@ contains
 
     do iTest = 1, size(testContainers)
       call logger%logTestRun(testContainers(iTest))
-      testContainers(iTest)%testResult%testStatus = fytest_TestStatus%testSucceded
-      call testContainers(iTest)%runTest(testContainers(iTest)%testName,&
-          & testContainers(iTest)%testParams, testContainers(iTest)%testResult)
+      call testContainers(iTest)%runTest(&
+          & testContainers(iTest)%testName, testContainers(iTest)%testParams,&
+          & testContainers(iTest)%testContext)
       call logger%logTestResult(testContainers(iTest))
     end do
 
@@ -971,8 +1055,8 @@ contains
     totals(:) = 0
     do iTest = 1, size(testContainers)
       associate (test => testContainers(iTest))
-        totals(test%testResult%testStatus) = totals(test%testResult%testStatus) + 1
-        if (test%testResult%testStatus == fytest_TestStatus%testFailed) then
+        totals(test%testContext%status) = totals(test%testContext%status) + 1
+        if (test%testContext%status == fytest_TestStatus%testFailed) then
           call logger%logFailedTest(test)
         end if
       end associate
@@ -996,36 +1080,39 @@ contains
   end subroutine fytest_TestLogger_logStatus
 
 
-  subroutine fytest_TestLogger_logTestRun(this, test)
+  subroutine fytest_TestLogger_logTestRun(this, container)
     class(fytest_TestLogger), intent(in) :: this
-    type(fytest_TestContainer), intent(in) :: test
+    type(fytest_TestContainer), intent(in) :: container
 
     call this%logStatus('Running',&
-        & trim(getFullTestName(test%suiteName, test%testName, test%testParams)))
+        & trim(getFullTestName(container%suiteName, container%testName, container%testParams)))
 
   end subroutine fytest_TestLogger_logTestRun
 
 
-  subroutine fytest_TestLogger_logTestResult(this, test)
+  subroutine fytest_TestLogger_logTestResult(this, container)
     class(fytest_TestLogger), intent(in) :: this
-    type(fytest_TestContainer), intent(in) :: test
+    type(fytest_TestContainer), intent(in) :: container
 
-    call this%logStatus(trim(statusChars(test%testResult%testStatus)),&
-        & trim(getFullTestName(test%suiteName, test%testName, test%testParams,&
-        & test%testResult%FixtureStr)))
+    call this%logStatus(trim(statusChars(container%testContext%status)),&
+        & trim(getFullTestName(container%suiteName, container%testName, container%testParams,&
+        & container%testContext%FixtureStr)))
 
   end subroutine fytest_TestLogger_logTestResult
 
 
-  subroutine fytest_TestLogger_logFailedTest(this, test)
+  subroutine fytest_TestLogger_logFailedTest(this, container)
     class(fytest_TestLogger), intent(in) :: this
-    type(fytest_TestContainer), intent(in) :: test
+    type(fytest_TestContainer), intent(in) :: container
 
-    write(this%fdOut, "(/, A, 1X, T20, A)") 'FAILING TEST:',&
-        & trim(getFullTestName(test%suiteName, test%testName, test%testParams,&
-        & test%testResult%fixtureStr))
-    write(this%fdOut, "(A, T20, 2A, I0)") 'Failed at: ', test%fileName, ':', test%testResult%line
-    write(this%fdOut, "(A, T20, A)") 'Failing condition: ', test%testResult%errorMsg
+    type(fytest_TestException) :: exc
+
+    write(this%fdOut, "(/, A, 1X, T15, A)") 'FAILING TEST:',&
+        & trim(getFullTestName(container%suiteName, container%testName, container%testParams,&
+        & container%testContext%fixtureStr))
+    exc = container%testContext%exceptions(1)
+    write(this%fdOut, "(A, T15, 2A, I0)") 'Failed at: ', exc%file, ':', exc%line
+    write(this%fdOut, "(A)") exc%message
 
   end subroutine fytest_TestLogger_logFailedTest
 
