@@ -428,7 +428,7 @@ module fytest_suite_${NAME}$
   $:fytest_current_suite["specification"]
 
   public :: fytest_getSuiteContainer_${NAME}$
-  
+
 contains
 
   $:fytest_current_suite["implementation"]
@@ -475,15 +475,16 @@ contains
   #:endif
 
   #:for FIXTURE_NAME, FIXTURE in fytest_fixtures.items()
-    subroutine fytest_getFixture_${FIXTURE_NAME}$(fixture)
-      type(fytest_Fixture), intent(out) :: fixture
+    subroutine fytest_getFixture_${FIXTURE_NAME}$(fytest_thisFixture)
+      type(fytest_Fixture), intent(out) :: fytest_thisFixture
 
       $:FIXTURE.get("specification", '')
-      call getFixture(fixture)
+
+      call fytest_getFixture(fytest_thisFixture)
 
     contains
 
-      subroutine getFixture(fixture)
+      subroutine fytest_getFixture(fixture)
         type(fytest_Fixture), intent(out) :: fixture
 
         fixture%name = "${FIXTURE_NAME}$"
@@ -505,21 +506,23 @@ contains
         #:endfor
         fixture%runTest => fytest_runFixturedTest_${FIXTURE_NAME}$
 
-      end subroutine getFixture
+      end subroutine fytest_getFixture
 
     end subroutine fytest_getFixture_${FIXTURE_NAME}$
   #:endfor
 
 
   #:for FIXTURE_NAME, FIXTURE in fytest_fixtures.items()
-    subroutine fytest_runFixturedTest_${FIXTURE_NAME}$(testname, testparams, testResult)
-      character(*), intent(in) :: testname
-      integer, intent(in) :: testparams(:)
-      type(fytest_TestResult), intent(out) :: testResult
+    subroutine fytest_runFixturedTest_${FIXTURE_NAME}$(fytest_testname, fytest_testparams,&
+        & fytest_testRes)
+      character(*), intent(in) :: fytest_testname
+      integer, intent(in) :: fytest_testparams(:)
+      type(fytest_TestResult), intent(out) :: fytest_testRes
 
       $:FIXTURE.get("specification", '')
-      call fytest_setUpParams(testparams)
-      call fytest_runTest(testname, testResult)
+
+      call fytest_setUpParams(fytest_testparams)
+      call fytest_runTest(fytest_testname, fytest_testRes)
 
     contains
 
