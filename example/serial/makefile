@@ -2,7 +2,7 @@
 .SUFFIXES: .f90 .fpp .o .fypp
 
 TARGETS = test_simple test_fixture test_parameterized test_parameterized2 \
-    test_failing_fixture
+    test_failing_fixture test_failing_suite
 
 .PHONY: all
 all: $(TARGETS)
@@ -47,6 +47,12 @@ test_failing_fixture: test_failing_fixture.o mymath.o fytest_lib.o
 	$(LN) $(LNOPT) -o $@ $^
 
 test_failing_fixture.o: mymath.o fytest_lib.o
+
+
+test_failing_suite: test_failing_suite.o mymath.o fytest_lib.o
+	$(LN) $(LNOPT) -o $@ $^
+
+test_failing_suite.o: mymath.o fytest_lib.o
 
 
 .PHONY: clean
