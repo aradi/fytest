@@ -18,7 +18,6 @@ include make.arch
 	$(FYPP) $(FYPPOPT) $< $@
 
 
-TEST_MYMATH_OBJS := mymath.o test_mymath.o fytest_lib.o
 test_simple: test_simple.o mymath.o fytest_lib.o
 	 $(LN) $(LNOPT) -o $@ $^
 
