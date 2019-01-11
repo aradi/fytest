@@ -561,7 +561,7 @@ $:fytest_current_suite.update([("name", NAME), ("specification", SPECIFICATION.s
     & ("implementation", IMPLEMENTATION.strip())])
 
 #:if nr_tests_without_fixture > 0
-  $:fytest_fixtures.update([('default', {&
+  $:fytest_fixtures.update([('', {&
       & "tests": fytest_test_names[len(fytest_test_names) - nr_tests_without_fixture :]&
       & })])
   #:set fytest_test_names = fytest_test_names[: len(fytest_test_names) - nr_tests_without_fixture]
@@ -884,19 +884,23 @@ contains
     type(fytest_Suite), allocatable :: suites(:)
     type(fytest_TestContainer), allocatable :: testContainers(:)
     type(fytest_Timer) :: testTimer
-    type(fytest_TestLogger) :: logger
+    type(fytest_TestLogger), allocatable :: logger
     integer :: totals(fytest_nTestStatus)
     logical :: hasErrors
     character(100) :: errorStr
 
-
-    call fytest_TestLogger_init(logger, .not. env%isMaster)
+    if (env%isMaster) then
+      allocate(logger)
+      call fytest_TestLogger_init(logger)
+    end if
 
     if (fytest_lib_mode /= fytest_test_driver_mode) then
-      write(errorStr, '(5A)')&
-          & "Test driver and test library have been compiled in different modes (",&
-          & trim(fytest_test_driver_mode), " vs. ", trim(fytest_lib_mode), ")"
-      call logger%writeError(trim(errorStr))
+      if (env%isMaster) then
+        write(errorStr, '(5A)')&
+            & "Test driver and test library have been compiled in different modes (",&
+            & trim(fytest_test_driver_mode), " vs. ", trim(fytest_lib_mode), ")"
+        call logger%writeError(trim(errorStr))
+      end if
       call fytest_GlobalEnv_final(env)
       error stop 1
     end if
@@ -913,8 +917,8 @@ contains
     call fytest_runTests(env, testContainers, logger)
     call fytest_finalSuites(suiteContainers)
     call testTimer%stop()
-    call fytest_generateFinalReport(suiteContainers, testContainers, logger, testTimer, totals,&
-        & hasErrors)
+    call fytest_generateFinalReport(suiteContainers, testContainers, testTimer, totals, hasErrors,&
+        & logger)
 
     if (hasErrors) then
       call fytest_GlobalEnv_final(env)
@@ -1132,7 +1136,6 @@ module fytest_lib
 
   type :: fytest_TestLogger
     integer :: fdOut = output_unit
-    logical :: silent = .false.
   contains
     procedure :: writeError => fytest_TestLogger_writeError
     procedure :: logSuiteInit => fytest_TestLogger_logSuiteInit
@@ -1196,6 +1199,7 @@ contains
     #:endif
 
     #:if fytest_with_mpi
+      call mpi_barrier(this%mpi%comm, error)
       call mpi_finalize(error)
     #:endif
 
@@ -1218,16 +1222,20 @@ contains
 
   subroutine fytest_initSuites(suiteContainers, logger)
     type(fytest_SuiteContainer), intent(inout) :: suiteContainers(:)
-    type(fytest_TestLogger), intent(inout) :: logger
+    type(fytest_TestLogger), optional, intent(inout) :: logger
 
     integer :: iSuite
 
     do iSuite = 1, size(suiteContainers)
       if (associated(suiteContainers(iSuite)%initSuite)) then
         call suiteContainers(iSuite)%suiteContext%setPhase(fytest_TestPhases%init)
-        call logger%logSuiteInit(suiteContainers(iSuite))
+        if (present(logger)) then
+          call logger%logSuiteInit(suiteContainers(iSuite))
+        end if
         call suiteContainers(iSuite)%initSuite(suiteContainers(iSuite)%suiteContext)
-        call logger%logSuiteInitResult(suiteContainers(iSuite))
+        if (present(logger)) then
+          call logger%logSuiteInitResult(suiteContainers(iSuite))
+        end if
         if (.not. suiteContainers(iSuite)%suiteContext%isValid()) then
           cycle
         end if
@@ -1481,30 +1489,34 @@ contains
   subroutine fytest_runTests(env, testContainers, logger)
     type(fytest_GlobalEnv), intent(inout) :: env
     type(fytest_TestContainer), intent(inout) :: testContainers(:)
-    type(fytest_TestLogger), intent(inout) :: logger
+    type(fytest_TestLogger), optional, intent(inout) :: logger
 
     integer :: iTest
 
     do iTest = 1, size(testContainers)
-      call logger%logTestRun(testContainers(iTest))
+      if (present(logger)) then
+        call logger%logTestRun(testContainers(iTest))
+      end if
       testContainers(iTest)%testContext%env = env
       call testContainers(iTest)%runTest(&
           & testContainers(iTest)%testName, testContainers(iTest)%testParams,&
           & testContainers(iTest)%testContext)
-      call logger%logTestResult(testContainers(iTest))
+      if (present(logger)) then
+        call logger%logTestResult(testContainers(iTest))
+      end if
     end do
 
   end subroutine fytest_runTests
 
 
-  subroutine fytest_generateFinalReport(suiteContainers, testContainers, logger, timer, totals,&
-      & hasErrors)
+  subroutine fytest_generateFinalReport(suiteContainers, testContainers, timer, totals, hasErrors,&
+      & logger)
     type(fytest_SuiteContainer), intent(in) :: suiteContainers(:)
     type(fytest_TestContainer), intent(in) :: testContainers(:)
-    type(fytest_TestLogger), intent(inout) :: logger
     type(fytest_Timer), intent(in) :: timer
     integer, intent(out) :: totals(fytest_nTestStatus)
     logical, intent(out) :: hasErrors
+    type(fytest_TestLogger), optional, intent(inout) :: logger
 
     integer :: iSuite, iTest
 
@@ -1513,7 +1525,9 @@ contains
     do iSuite = 1, size(suiteContainers)
       associate (suite => suiteContainers(iSuite))
         if (suite%suiteContext%status == fytest_TestStatus%testFailed) then
-          call logger%logFailedSuiteInit(suite)
+          if (present(logger)) then
+            call logger%logFailedSuiteInit(suite)
+          end if
           hasErrors = .true.
         end if
       end associate
@@ -1524,12 +1538,16 @@ contains
       associate (test => testContainers(iTest))
         totals(test%testContext%statusGlobal) = totals(test%testContext%statusGlobal) + 1
         if (test%testContext%statusGlobal == fytest_TestStatus%testFailed) then
-          call logger%logFailedTest(test)
+          if (present(logger)) then
+            call logger%logFailedTest(test)
+          end if
           hasErrors = .true.
         end if
       end associate
     end do
-    call logger%logTestStatistics(totals, timer)
+    if (present(logger)) then
+      call logger%logTestStatistics(totals, timer)
+    end if
 
   end subroutine fytest_generateFinalReport
 
@@ -1538,11 +1556,8 @@ contains
 !!!  TestLogger
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  subroutine fytest_TestLogger_init(this, silent)
+  subroutine fytest_TestLogger_init(this)
     type(fytest_TestLogger), intent(out) :: this
-    logical, intent(in) :: silent
-
-    this%silent = silent
 
   end subroutine fytest_TestLogger_init
 
@@ -1551,9 +1566,6 @@ contains
     class(fytest_TestLogger), intent(inout) :: this
     character(*), intent(in) :: msg
 
-    if (this%silent) then
-      return
-    end if
     write(this%fdOut, "(A,A)") "ERROR: ", msg
 
   end subroutine fytest_TestLogger_writeError
@@ -1564,9 +1576,6 @@ contains
     character(*), intent(in) :: status
     character(*), intent(in) :: msg
 
-    if (this%silent) then
-      return
-    end if
     write(this%fdOut, "('[ ', A, T11, ' ] ', A)") trim(status), trim(msg)
 
   end subroutine fytest_TestLogger_logStatus
@@ -1576,9 +1585,6 @@ contains
     class(fytest_TestLogger), intent(in) :: this
     class(fytest_SuiteContainer), intent(in) :: container
 
-    if (this%silent) then
-      return
-    end if
     call this%logStatus('Init', container%name)
 
   end subroutine fytest_TestLogger_logSuiteInit
@@ -1588,9 +1594,6 @@ contains
     class(fytest_TestLogger), intent(in) :: this
     class(fytest_SuiteContainer), intent(in) :: container
 
-    if (this%silent) then
-      return
-    end if
     call this%logStatus(trim(statusChars(container%suiteContext%status)), container%name)
 
   end subroutine fytest_TestLogger_logSuiteInitResult
@@ -1602,9 +1605,6 @@ contains
 
     type(fytest_TestException) :: exc
 
-    if (this%silent) then
-      return
-    end if
     write(this%fdOut, "(/, A, 1X, T20, A)") 'FAILING SUITE:', container%name
     exc = container%suiteContext%exceptions(1)
     write(this%fdOut, "(A, T20, 2A, I0)") 'Failed at: ', exc%file, ':', exc%line
@@ -1617,11 +1617,9 @@ contains
     class(fytest_TestLogger), intent(in) :: this
     type(fytest_TestContainer), intent(in) :: container
 
-    if (this%silent) then
-      return
-    end if
     call this%logStatus('Running',&
-        & trim(getFullTestName(container%suiteName, container%testName, container%testParams)))
+        & trim(getFullTestName(container%suiteName, container%fixtureName, container%testName,&
+        & container%testParams)))
 
   end subroutine fytest_TestLogger_logTestRun
 
@@ -1630,12 +1628,9 @@ contains
     class(fytest_TestLogger), intent(in) :: this
     type(fytest_TestContainer), intent(in) :: container
 
-    if (this%silent) then
-      return
-    end if
     call this%logStatus(trim(statusChars(container%testContext%statusGlobal)),&
-        & trim(getFullTestName(container%suiteName, container%testName, container%testParams,&
-        & container%testContext%textRepr)))
+        & trim(getFullTestName(container%suiteName, container%fixtureName, container%testName,&
+        & container%testParams, container%testContext%textRepr)))
 
   end subroutine fytest_TestLogger_logTestResult
 
@@ -1647,12 +1642,9 @@ contains
     type(fytest_TestException) :: exc
     integer :: iExc
 
-    if (this%silent) then
-      return
-    end if
     write(this%fdOut, "(/, A, 1X, T20, A)") 'FAILING TEST:',&
-        & trim(getFullTestName(container%suiteName, container%testName, container%testParams,&
-        & container%testContext%textRepr))
+        & trim(getFullTestName(container%suiteName, container%fixtureName, container%testName,&
+        & container%testParams, container%testContext%textRepr))
     do iExc = 1, size(container%testContext%exceptions)
       exc = container%testContext%exceptions(iExc)
       #:if fytest_with_mpi
@@ -1673,10 +1665,6 @@ contains
     class(fytest_Timer), intent(in) :: timer
 
     real :: wallClockTime, cpuTime
-
-    if (this%silent) then
-      return
-    end if
 
     wallClockTime = timer%getWallClockTime()
     cpuTime = timer%getCpuTime()
@@ -1785,14 +1773,17 @@ contains
   end function getTestParamStr
 
 
-  function getFullTestName(suiteName, testName, testParams, textRepr) result(fullTestName)
+  function getFullTestName(suiteName, fixtureName, testName, testParams, textRepr)&
+      & result(fullTestName)
     character(*), intent(in) :: suiteName
+    character(*), intent(in) :: fixtureName
     character(*), intent(in) :: testName
     integer, intent(in) :: testParams(:)
     character(:), allocatable, intent(in), optional :: textRepr
-    character(100) :: fullTestName
+    character(1024) :: fullTestName
 
     character(:), allocatable :: textReprSuffix
+    character(1024) :: prefix
 
     textReprSuffix = ''
     if (present(textRepr)) then
@@ -1800,11 +1791,16 @@ contains
         textReprSuffix = ' {' // textRepr // '}'
       end if
     end if
-    if (size(testParams) > 0) then
-      write(fullTestName, "(A, '/', A, '(', A, ')', A)")  trim(suiteName),&
-          & trim(testName), trim(getTestParamStr(testParams)), textReprSuffix
+    if (len_trim(fixtureName) > 0) then
+      write(prefix, "(A, '/', A)") trim(suiteName), trim(fixtureName)
     else
-      write(fullTestName, "(A, '/', A, A)") trim(suiteName), trim(testName), textReprSuffix
+      write(prefix, "(A)") trim(suiteName)
+    end if
+    if (size(testParams) > 0) then
+      write(fullTestName, "(A, '(', A, ')/', A, A)")  trim(prefix),&
+          & trim(getTestParamStr(testParams)), trim(testName), textReprSuffix
+    else
+      write(fullTestName, "(A, '/', A, A)") trim(prefix), trim(testName), textReprSuffix
     end if
 
   end function getFullTestName
