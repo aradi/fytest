@@ -15,10 +15,11 @@ FyTest currently supports following main features:
 * Test fixtures with initializers and finalizers
 * Parameterized test fixtures
 * Test suites with initializers and finalizers
-    
+* Testing of MPI-parallel codes
+
 At the current early stage of development, there is no extensive documentation
-available yet. Have a look at the examples in the ``examples/`` folder for
-demonstration of usage.
+available yet. Have a look at the examples in the `examples/ <examples>`_
+folder for demonstration of usage.
 
 The project is `hosted on github <http://github.com/aradi/fytest>`_.
 
