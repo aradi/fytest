@@ -45,7 +45,7 @@
     #! Tests can access the fixture scope
 
     #:block TEST('testval')
-      @:ASSERT_EQ(factorial(factcalc%val), factcalc%expresult)
+      @:ASSERT(factorial(factcalc%val) == factcalc%expresult)
     #:endblock
 
     #! We define a renderer to show the number used in a given fixture

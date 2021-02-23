@@ -11,21 +11,21 @@
   #! Testing for various special factorial values
 
   #:block TEST('1')
-    @:ASSERT_EQ(factorial(1), 1)
+    @:ASSERT(factorial(1) == 1)
   #:endblock
 
   #:block TEST('5')
-    @:ASSERT_EQ(factorial(5), 120)
+    @:ASSERT(factorial(5) == 120)
   #:endblock
 
   #:block TEST('6')
-    @:ASSERT_EQ(factorial(6), 720)
+    @:ASSERT(factorial(6) == 720)
   #:endblock
 
   #! This one will fail in order to demonstrate test failing
 
   #:block TEST('0_failing')
-    @:ASSERT_EQ(factorial(0), 0)
+    @:ASSERT(factorial(0) == 0)
   #:endblock
 
   #! This should pass again
@@ -37,5 +37,4 @@
 #:endblock TEST_SUITE
 
 
-#:block TEST_DRIVER()
-#:endblock TEST_DRIVER
+@:TEST_DRIVER()

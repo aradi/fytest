@@ -1,0 +1,925 @@
+#:mute
+#!
+#! Copyright (c) 2021 Bálint Aradi, Universität Bremen
+#!
+#! All rights reserved.
+#!
+#! Redistribution and use in source and binary forms, with or without modification,
+#! are permitted provided that the following conditions are met:
+#!
+#! 1. Redistributions of source code must retain the above copyright notice, this
+#! list of conditions and the following disclaimer.
+#!
+#! 2. Redistributions in binary form must reproduce the above copyright notice,
+#! this list of conditions and the following disclaimer in the documentation and/or
+#! other materials provided with the distribution.
+#!
+#! THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+#! ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+#! WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#! DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+#! ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+#! (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+#! LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+#! ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+#! (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+#! SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#!
+
+
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#!!!  Public macros
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+#!> Defines a test suite.
+#!>
+#!> Args:
+#!>     NAME: Name of the test
+#!>     SPECIFICATION: Specification  part of the test suite
+#!>     IMPLEMENTATION: Test implementation
+#!>
+#:def TEST_SUITE(NAME, SPECIFICATION, IMPLEMENTATION)
+  #:mute
+    $:fytest_set_serial_mode()
+    $:fytest_register_test_suite(NAME, SPECIFICATION, IMPLEMENTATION)
+  #:endmute
+  $:fytest_render_current_test_suite()
+  #:mute
+    $:fytest_reset_current_test_suite()
+  #:endmute
+#:enddef
+
+
+#!> Defines an MPI test suite.
+#!>
+#!> Args:
+#!>     NAME: Name of the test
+#!>     SPECIFICATION: Specification  part of the test suite
+#!>     IMPLEMENTATION: Test implementation
+#!>
+#:def MPI_TEST_SUITE(NAME, SPECIFICATION, IMPLEMENTATION)
+  #:mute
+    $:fytest_set_mpi_mode()
+    $:fytest_register_test_suite(NAME, SPECIFICATION, IMPLEMENTATION)
+  #:endmute
+  $:fytest_render_current_test_suite()
+  #:mute
+    $:fytest_reset_current_test_suite()
+  #:endmute
+#:enddef MPI_TEST_SUITE
+
+
+#!> Defines a test suite initializer.
+#!>
+#!> Args:
+#!>     IMPLEMENTATION: Test suite initializer implementation
+#!>
+#:def TEST_SUITE_INIT(IMPLEMENTATION)
+  #:mute
+    $:fytest_set_serial_mode()
+    $:fytest_register_test_suite_init(IMPLEMENTATION)
+  #:endmute
+#:enddef TEST_SUITE_INIT
+
+
+#!> Defines an MPI test suite initializer.
+#!>
+#!> Args:
+#!>     IMPLEMENTATION: Test suite initializer implementation
+#!>
+#:def MPI_TEST_SUITE_INIT(IMPLEMENTATION)
+  #:mute
+    $:fytest_set_mpi_mode()
+    $:fytest_register_test_suite_init(IMPLEMENTATION)
+  #:endmute
+#:enddef MPI_TEST_SUITE_INIT
+
+
+#!> Defines a test suite finalizer.
+#!>
+#!> Args:
+#!>     IMPLEMENTATION: Test suite finalizer implementation
+#!>
+#:def TEST_SUITE_FINAL(IMPLEMENTATION)
+  #:mute
+    $:fytest_set_serial_mode()
+    $:fytest_register_test_suite_final(IMPLEMENTATION)
+  #:endmute
+#:enddef TEST_SUITE_FINAL
+
+
+#!> Defines an MPI test suite finalizer.
+#!>
+#!> Args:
+#!>     IMPLEMENTATION: Test suite finalizer implementation
+#!>
+#:def MPI_TEST_SUITE_FINAL(IMPLEMENTATION)
+  #:mute
+    $:fytest_set_mpi_mode()
+    $:fytest_register_test_suite_final(IMPLEMENTATION)
+  #:endmute
+#:enddef MPI_TEST_SUITE_FINAL
+
+
+#!> Defines a test fixture.
+#!>
+#!> Args:
+#!>    NAME: Name of the test fixture
+#!>    SPECIFICATION: Specification part of the fixture
+#!>    IMPLEMENTATION: Implementation part of the fixture
+#!>    ITERATORS: Optional list of (iterator_name, iterated_array) or (iterator_name, range_tuple)
+#!>        tuples, where iterator_name is the name of an iterator variable and iterated_array is
+#!>        the array it will iterate over. If range_tuple is defined, it can have the forms
+#!>        (to,), (from, to), with from and to being inclusive boundaries
+#!>        of the iterations.
+#!>    RENDERER: Optional name of subroutine used to render the name of the test case.
+#!>
+#:def TEST_FIXTURE(NAME, SPECIFICATION, IMPLEMENTATION='', ITERATORS=None, RENDERER=None)
+  #:mute
+    $:fytest_set_serial_mode()
+    $:fytest_register_test_fixture(NAME, SPECIFICATION, IMPLEMENTATION, ITERATORS, RENDERER)
+  #:endmute
+#:enddef TEST_FIXTURE
+
+
+#!> Defines an MPI test fixture.
+#!>
+#!> Args:
+#!>    NAME: Name of the test fixture
+#!>    SPECIFICATION: Specification part of the fixture
+#!>    IMPLEMENTATION: Implementation part of the fixture
+#!>    ITERATORS: Optional list of (iterator_name, iterated_array) or (iterator_name, range_tuple)
+#!>        tuples, where iterator_name is the name of an iterator variable and iterated_array is
+#!>        the array it will iterate over. If range_tuple is defined, it can have the forms
+#!>        (to,), (from, to), with from and to being inclusive boundaries
+#!>        of the iterations.
+#!>    RENDERER: Optional name of subroutine used to render the name of the test case.
+#!>
+#:def MPI_TEST_FIXTURE(NAME, SPECIFICATION, IMPLEMENTATION='', ITERATORS=None, RENDERER=None)
+  #:mute
+    $:fytest_set_mpi_mode()
+    $:fytest_register_test_fixture(NAME, SPECIFICATION, IMPLEMENTATION, ITERATORS, RENDERER)
+  #:endmute
+#:enddef MPI_TEST_FIXTURE
+
+
+#!> Defines a test fixture initializer.
+#!>
+#!> Args:
+#!>     IMPLEMENTATION: Test fixture initializer implementation
+#!>
+#:def TEST_FIXTURE_INIT(IMPLEMENTATION)
+  #:mute
+    $:fytest_set_serial_mode()
+    $:fytest_register_test_fixture_init(IMPLEMENTATION)
+  #:endmute
+#:enddef TEST_FIXTURE_INIT
+
+
+#!> Defines an MPI test fixture initializer.
+#!>
+#!> Args:
+#!>     IMPLEMENTATION: Test fixture initializer implementation
+#!>
+#:def MPI_TEST_FIXTURE_INIT(IMPLEMENTATION)
+  #:mute
+    $:fytest_set_mpi_mode()
+    $:fytest_register_test_fixture_init(IMPLEMENTATION)
+  #:endmute
+#:enddef MPI_TEST_FIXTURE_INIT
+
+
+#!> Defines a test fixture finalizer.
+#!>
+#!> Args:
+#!>     IMPLEMENTATION: Test fixture finalizer implementation
+#!>
+#:def TEST_FIXTURE_FINAL(IMPLEMENTATION)
+  #:mute
+    $:fytest_set_serial_mode()
+    $:fytest_register_test_fixture_final(IMPLEMENTATION)
+  #:endmute
+#:enddef TEST_FIXTURE_FINAL
+
+
+#!> Defines an MPI test fixture finalizer.
+#!>
+#!> Args:
+#!>     IMPLEMENTATION: Test fixture finalizer implementation
+#!>
+#:def MPI_TEST_FIXTURE_FINAL(IMPLEMENTATION)
+  #:mute
+    $:fytest_set_mpi_mode()
+    $:fytest_register_test_fixture_final(IMPLEMENTATION)
+  #:endmute
+#:enddef MPI_TEST_FIXTURE_FINAL
+
+
+#!> Defines a test case.
+#!>
+#!> Args:
+#!>     NAME: Name of the test
+#!>     IMPLEMENTATION: Test implementation
+#!>
+#:def TEST(NAME, IMPLEMENTATION)
+  #:mute
+    $:fytest_set_serial_mode()
+    $:fytest_register_test_case(NAME, IMPLEMENTATION)
+  #:endmute
+  $:fytest_render_test_case_marker()
+#:enddef TEST
+
+
+#!> Defines an MPI test case.
+#!>
+#!> Args:
+#!>     NAME: Name of the test
+#!>     IMPLEMENTATION: Test implementation
+#!>
+#:def MPI_TEST(NAME, IMPLEMENTATION)
+  #:mute
+    $:fytest_set_mpi_mode()
+    $:fytest_register_test_case(NAME, IMPLEMENTATION)
+  #:endmute
+  $:fytest_render_test_case_marker()
+#:enddef MPI_TEST
+
+
+#!> Generates driver code for the test suites.
+#!>
+#!> Note: It can only drive those test suites which were generated in the same file.
+#!>
+#:def TEST_DRIVER()
+  #:mute
+    $:fytest_set_serial_mode()
+  #:endmute
+  $:fytest_render_test_driver()
+#:enddef TEST_DRIVER
+
+
+#!> Generates an MPI driver code for the test suites.
+#!>
+#!> Note: It can only drive those test suites which were generated in the same file.
+#!>
+#:def MPI_TEST_DRIVER()
+  #:mute
+    $:fytest_set_mpi_mode()
+  #:endmute
+  $:fytest_render_test_driver()
+#:enddef MPI_TEST_DRIVER
+
+
+#!> Renders the backend library needed for FyTest.
+#!>
+#:def TEST_LIBRARY()
+  #:mute
+    $:fytest_set_serial_mode()
+  #:endmute
+  $:fytest_render_test_library()
+#:enddef TEST_LIBRARY
+
+
+#!> Renders the MPI backend library needed for FyTest.
+#!>
+#:def MPI_TEST_LIBRARY()
+  #:mute
+    $:fytest_set_mpi_mode()
+  #:endmute
+  $:fytest_render_test_library()
+#:enddef MPI_TEST_LIBRARY
+
+
+#!> Checks the fulfillment of a given condition.
+#!>
+#!> If the condition evalutes to .false. the test will be registered as failed and no further code
+#!> in that test is executed, except for the optional fixture finalizer. If the condition evaluates
+#!> to .true., test execution is continued.
+#!>
+#!> Args:
+#!>     COND: Condition to be fulfilled.
+#!>
+#:def ASSERT(COND)
+  #:mute
+    $:fytest_set_serial_mode()
+  #:endmute
+  $:fytest_render_assert(COND)
+#:enddef ASSERT
+
+
+#!> Checks the fulfillment of a given condition.
+#!>
+#!> If the condition evalutes to .false. the test will be registered as failed and no further code
+#!> in that test is executed, except for the optional fixture finalizer. If the condition evaluates
+#!> to .true., test execution is continued.
+#!>
+#!> Args:
+#!>     COND: Condition to be fulfilled.
+#!>
+#:def MPI_ASSERT(COND)
+  #:mute
+    $:fytest_set_mpi_mode()
+  #:endmute
+  $:fytest_render_assert(COND)
+#:enddef MPI_ASSERT
+
+
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#!!!  Internals
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+#! Whether MPI parallelism is required
+#:set fytest_with_mpi = None
+
+#! Names of the known test suites
+#:set fytest_suite_names = []
+
+#! The current test suite
+#! values: {"name:" name of the test suite
+#!          "specification": specification code of the suite
+#!          "implementation": implementation code of the suite (without markers)
+#!          "init": suite initializer code (optional)
+#!          "final": suite finalizer code (optional)}
+#:set fytest_current_suite = {}
+
+#! Tests in the current suite
+#! Key: name of the test
+#! Value: {"implementation": implementation code of the test}
+#:set fytest_tests = {}
+
+#! Names of the tests in the current suite
+#:set fytest_test_names = []
+
+#! Fixtures in the current suite
+#! Key: name of the fixture
+#! Value: {"init": implementation code of the fixture initializer or None,
+#!         "final": impementation code of the fixture finalizer or None,
+#!         "specification": specification section of the fixture,
+#!         "implementation": implementation section of the fixture,
+#!         "iterators": List of (iterator, iterated_array) tuples for parameterized tests or None,
+#!         "renderer": Renderer for obtaining a text representation of the test
+#!         "tests": Names of the contained tests.}
+#:set fytest_fixtures = {}
+
+#! Current fixture
+#:set fytest_current_fixture = {}
+
+#! String to emit and collect for registered tests
+#:set fytest_test_case_marker = '\n#:_FYTEST_REGISTERED_TEST_\n'
+
+
+#! Turns on serial mode
+#:def fytest_set_serial_mode()
+  #:mute
+    #:global fytest_with_mpi
+    #:if fytest_with_mpi is None
+      #:set fytest_with_mpi = False
+    #:elif fytest_with_mpi
+      #:stop "Mixing serial and MPI constructs is not enabled"
+    #:endif
+  #:endmute
+#:enddef fytest_set_serial_mode
+
+
+#! Turns on MPI mode
+#:def fytest_set_mpi_mode()
+  #:mute
+    #:global fytest_with_mpi
+    #:if fytest_with_mpi is None
+      #:set fytest_with_mpi = True
+    #:elif not fytest_with_mpi
+      #:stop "Mixing serial and non-MPI constructs is not enabled"
+    #:endif
+  #:endmute
+#:enddef fytest_set_mpi_mode
+
+
+#! Registers a test case
+#!
+#! Args:
+#!     NAME: Test case name
+#!     IMPLEMENTATION: Test implementation
+#!
+#:def fytest_register_test_case(NAME, IMPLEMENTATION)
+  #:mute
+
+    #:global fytest_tests
+    #:global fytest_test_names
+    #:global fytest_fixtures
+
+    $:fytest_check_name_validity(NAME)
+
+    #:if NAME in fytest_tests
+      #:stop "Test '" + NAME + "' has already been defined"
+    #:endif
+
+    $:fytest_test_names.append(NAME)
+    $:fytest_tests.update([(NAME, {"implementation": IMPLEMENTATION.strip()})])
+
+  #:endmute
+#:enddef fytest_register_test_case
+
+
+#! Renders a marker for a registered test.
+#!
+#! The marker will not appear in the final output as it will be collected later either by
+#! fytest_register_test_fixture() (for tests within a fixture) or by fytest_register_suite() (for
+#! tests without a fixture
+#!
+#:def fytest_render_test_case_marker()
+  $:fytest_test_case_marker
+#:enddef fytest_render_test_case_marker
+
+
+#! Registers a test fixture
+#!
+#! Args:
+#!     NAME: Name of the fixture
+#!     SPECIFICATION: Specificiation of the fixture
+#!     IMPLEMENTATION: Implementation of the fixture
+#!     ITERATORS: Iterators to consider for making parameterized tests.
+#!
+#:def fytest_register_test_fixture(NAME, SPECIFICATION, IMPLEMENTATION, ITERATORS, RENDERER)
+  #:mute
+
+    #:global fytest_fixtures
+    #:global fytest_current_fixture
+    #:global fytest_test_names
+
+    #:set nr_tests_in_fixture = IMPLEMENTATION.count(fytest_test_case_marker)
+    #:set IMPLEMENTATION = IMPLEMENTATION.replace(fytest_test_case_marker, '')
+
+    $:fytest_fixtures.update([(NAME, {&
+        & "init": fytest_current_fixture.get("init"),&
+        & "final": fytest_current_fixture.get("final"),&
+        & "specification": SPECIFICATION.strip(),&
+        & "implementation": IMPLEMENTATION.strip(),&
+        & "iterators": ITERATORS,&
+        & "renderer": RENDERER,&
+        & "tests": fytest_test_names[len(fytest_test_names) - nr_tests_in_fixture :]&
+        & })])
+    #:set fytest_test_names = fytest_test_names[: len(fytest_test_names) - nr_tests_in_fixture]
+    #:set fytest_current_fixture = {}
+  #:endmute
+#:enddef fytest_register_test_fixture
+
+
+#! Registers a test fixture initializer
+#!
+#! Args:
+#!     IMPLEMENTATION: implementation part of the test fixture finalizer
+#!
+#:def fytest_register_test_fixture_init(IMPLEMENTATION)
+  #:mute
+
+    #:global fytest_current_fixture
+
+    #:if fytest_current_fixture.get("init") is not None
+      #:stop "Double specification of test initializer"
+    #:endif
+    $:fytest_current_fixture.update([("init", IMPLEMENTATION)])
+
+  #:endmute
+#:enddef fytest_register_test_fixture_init
+
+
+#! Registers a test fixture finalizer
+#!
+#! Args:
+#!     IMPLEMENTATION: implementation part of the test fixture finalizer
+#!
+#:def fytest_register_test_fixture_final(IMPLEMENTATION)
+  #:mute
+
+    #:global fytest_current_fixture
+
+    #:if fytest_current_fixture.get("final") is not None
+      #:stop "Double specification of test initializer"
+    #:endif
+    $:fytest_current_fixture.update([("final", IMPLEMENTATION.strip())])
+
+  #:endmute
+#:enddef fytest_register_test_fixture_final
+
+
+#! Registers a test suite.
+#!
+#! Args:
+#!     NAME: Name of the test suite.
+#!     SPECIFICATION: Specification code of the test suite.
+#!     IMPLEMENTATION: Implementation code of the test suite. It may contains markers for
+#!         tests without fixture, which will be collected by this routine.
+#!
+#:def fytest_register_test_suite(NAME, SPECIFICATION, IMPLEMENTATION)
+  #:mute
+
+    #:global fytest_suite_names
+    #:global fytest_current_suite
+    #:global fytest_fixtures
+    #:global fytest_test_names
+
+    #:set nr_tests_without_fixture = IMPLEMENTATION.count(fytest_test_case_marker)
+    #:set IMPLEMENTATION = IMPLEMENTATION.replace(fytest_test_case_marker, '')
+
+    $:fytest_suite_names.append(NAME)
+    $:fytest_current_suite.update([("name", NAME), ("specification", SPECIFICATION.strip()),&
+        & ("implementation", IMPLEMENTATION.strip())])
+
+    #:if nr_tests_without_fixture > 0
+      $:fytest_fixtures.update([('', {&
+          & "tests": fytest_test_names[len(fytest_test_names) - nr_tests_without_fixture :]&
+          & })])
+      #:set fytest_test_names = fytest_test_names[: len(fytest_test_names) - nr_tests_without_fixture]
+    #:endif
+
+    #:if len(fytest_test_names) > 0
+      #:stop "Internal error: tests without any fixture found" + str(fytest_test_names)
+    #:endif
+
+  #:endmute
+#:enddef
+
+
+#! Registers a test suite initializer
+#!
+#! Args:
+#!     IMPLEMENTATION: implementation part of the test suite initializer
+#!
+#:def fytest_register_test_suite_init(IMPLEMENTATION)
+  #:mute
+
+    #:global fytest_current_suite
+
+    #:if fytest_current_suite.get("init") is not None
+      #:stop "Double specification of test suite initializer"
+    #:endif
+    $:fytest_current_suite.update([("init", IMPLEMENTATION.strip())])
+
+  #:endmute
+#:enddef fytest_register_test_suite_init
+
+
+#! Registers a test suite finalizer
+#!
+#! Args:
+#!     IMPLEMENTATION: implementation part of the test suite finalizer
+#!
+#:def fytest_register_test_suite_final(IMPLEMENTATION)
+  #:mute
+
+    #:global fytest_current_suite
+
+    #:if fytest_current_suite.get("final") is not None
+      #:stop "Double specification of test suite finalizer"
+    #:endif
+    $:fytest_current_suite.update([("final", IMPLEMENTATION.strip())])
+
+  #:endmute
+#:enddef fytest_register_test_suite_final
+
+
+#! Resets the current test suite
+#!
+#! Should be called after the test suite has been rendered.
+#!
+#:def fytest_reset_current_test_suite()
+  #:mute
+    #:global fytest_current_suite
+    #:set fytest_current_suite = {}
+  #:endmute
+#:enddef
+
+
+#! Generates the code for a test suite (module).
+#!
+#:def fytest_render_current_test_suite()
+  #:mute
+    #:set NAME = fytest_current_suite["name"]
+  #:endmute
+!
+! Test suite module ${NAME}$
+!
+module fytest_suite_${NAME}$
+  use fytest
+
+  $:fytest_current_suite["specification"]
+
+  public :: fytest_getSuiteContainer_${NAME}$
+
+contains
+
+  $:fytest_current_suite["implementation"]
+
+
+  subroutine fytest_getSuiteContainer_${NAME}$(suiteContainer)
+    type(fytest_SuiteContainer), intent(out) :: suiteContainer
+
+    suiteContainer%name = "${NAME}$"
+    #:if "init" in fytest_current_suite
+      suiteContainer%initSuite => fytest_initSuite
+    #:endif
+    #:if "final" in fytest_current_suite
+      suiteContainer%finalSuite => fytest_finalSuite
+    #:endif
+    suiteContainer%getSuite => fytest_getSuite
+
+  end subroutine fytest_getSuiteContainer_${NAME}$
+
+
+  subroutine fytest_getSuite(suite)
+    type(fytest_Suite), intent(out) :: suite
+
+    suite%name = "${NAME}$"
+    suite%fileName = "${_FILE_}$"
+    allocate(suite%fixtures(${len(fytest_fixtures)}$))
+    #:for FIXTURE_IND, FIXTURE_NAME in enumerate(fytest_fixtures)
+      call fytest_getFixture_${FIXTURE_NAME}$(suite%fixtures(${FIXTURE_IND + 1}$))
+    #:endfor
+
+  end subroutine fytest_getSuite
+
+
+  #:if "init" in fytest_current_suite
+    subroutine fytest_initSuite(fytest_context)
+      type(fytest_TestContext), intent(inout) :: fytest_context
+
+      ${fytest_current_suite["init"]}$
+
+    end subroutine fytest_initSuite
+  #:endif
+
+  #:if "final" in fytest_current_suite
+    subroutine fytest_finalSuite(fytest_context)
+      type(fytest_TestContext), intent(inout) :: fytest_context
+
+      ${fytest_current_suite["final"]}$
+
+    end subroutine fytest_finalSuite
+  #:endif
+
+  #:for FIXTURE_NAME, FIXTURE in fytest_fixtures.items()
+    subroutine fytest_getFixture_${FIXTURE_NAME}$(fytest_thisFixture)
+      type(fytest_Fixture), intent(out) :: fytest_thisFixture
+
+      $:FIXTURE.get("specification", '')
+
+      call fytest_getFixture(fytest_thisFixture)
+
+    contains
+
+      subroutine fytest_getFixture(fixture)
+        type(fytest_Fixture), intent(out) :: fixture
+
+        fixture%name = "${FIXTURE_NAME}$"
+        allocate(fixture%tests(${len(FIXTURE["tests"])}$))
+        #:for TEST_IND, TEST in enumerate(FIXTURE["tests"])
+          fixture%tests(${TEST_IND + 1}$)%str = "${TEST}$"
+        #:endfor
+        #:set FIXTURE_ITERATORS = FIXTURE.get("iterators")
+        #:set FIXTURE_ITERATORS = [] if FIXTURE_ITERATORS is None else FIXTURE_ITERATORS
+        allocate(fixture%paramBounds(2, ${len(FIXTURE_ITERATORS)}$))
+        #:for IPARAM, FIXTURE_PARAM in enumerate(FIXTURE_ITERATORS)
+          #:if isinstance(FIXTURE_PARAM[1], str)
+            fixture%paramBounds(1, ${IPARAM + 1}$) = lbound(${FIXTURE_PARAM[1]}$, dim=1)
+            fixture%paramBounds(2, ${IPARAM + 1}$) = ubound(${FIXTURE_PARAM[1]}$, dim=1)
+          #:elif isinstance(FIXTURE_PARAM[1], int)
+            fixture%paramBounds(1, ${IPARAM + 1}$) = 1
+            fixture%paramBounds(2, ${IPARAM + 1}$) = ${FIXTURE_PARAM[1]}$
+          #:endif
+        #:endfor
+        fixture%runTest => fytest_runFixturedTest_${FIXTURE_NAME}$
+
+      end subroutine fytest_getFixture
+
+    end subroutine fytest_getFixture_${FIXTURE_NAME}$
+  #:endfor
+
+
+  #:for FIXTURE_NAME, FIXTURE in fytest_fixtures.items()
+    subroutine fytest_runFixturedTest_${FIXTURE_NAME}$(fytest_testname, fytest_testparams,&
+        & fytest_testCtx)
+      character(*), intent(in) :: fytest_testname
+      integer, intent(in) :: fytest_testparams(:)
+      type(fytest_TestContext), intent(inout) :: fytest_testCtx
+
+      $:FIXTURE.get("specification", '')
+
+      call fytest_setUpParams(fytest_testparams)
+      call fytest_runTest(fytest_testname, fytest_testCtx)
+
+    contains
+
+      $:FIXTURE.get("implementation", '')
+
+      subroutine fytest_setUpParams(testParams)
+        integer, intent(in) :: testParams(:)
+
+        #:set FIXTURE_ITERATORS = FIXTURE.get("iterators")
+        #:set FIXTURE_ITERATORS = [] if FIXTURE_ITERATORS is None else FIXTURE_ITERATORS
+        if (size(testParams) /= ${len(FIXTURE_ITERATORS)}$) then
+          print *, "Internal error: invalid test parameter array size"
+          error stop
+        end if
+        #:for IPARAM, FIXTURE_PARAM in enumerate(FIXTURE_ITERATORS)
+          #:set ITERATOR, ITERVALUE = FIXTURE_PARAM
+          #:if isinstance(ITERVALUE, str)
+            ${ITERATOR}$ = ${ITERVALUE}$(testParams(${IPARAM + 1}$))
+          #:elif isinstance(ITERVALUE, int)
+            ${ITERATOR}$ = testParams(${IPARAM + 1}$)
+          #:endif
+        #:endfor
+
+      end subroutine fytest_setUpParams
+
+
+      subroutine fytest_runTest(testname, testContext)
+        character(*), intent(in) :: testname
+        type(fytest_TestContext), intent(inout) :: testContext
+
+        #:if FIXTURE.get("init") is not None
+          call testContext%setPhase(fytest_TestPhases%init)
+          call fytest_initFixture(testContext)
+        #:endif
+        if (.not. testContext%isValid()) then
+          return
+        end if
+
+        #:if FIXTURE.get("renderer") is not None
+          call testContext%setTextRepr(trim(${FIXTURE["renderer"]}$()))
+        #:else
+          call testContext%setTextRepr("")
+        #:endif
+
+        call testContext%setPhase(fytest_TestPhases%test)
+        select case (testname)
+        #:for TEST_NAME in FIXTURE["tests"]
+          case ("${TEST_NAME}$")
+            call fytest_runTest_${TEST_NAME}$(testContext)
+        #:endfor
+        case default
+          print *, 'ERROR: Invalid test name "', testname, '" in suite "${NAME}$", fixture&
+              & "${FIXTURE_NAME}$"'
+          error stop
+        end select
+
+        #:if FIXTURE.get("final") is not None
+          call testContext%setPhase(fytest_TestPhases%final)
+          call fytest_finalFixture(testContext)
+        #:endif
+
+        call testContext%setPhase(fytest_TestPhases%done)
+
+      end subroutine fytest_runTest
+
+
+      #:if FIXTURE.get("init") is not None
+        subroutine fytest_initFixture(fytest_context)
+          type(fytest_TestContext), intent(inout) :: fytest_context
+
+          $:FIXTURE["init"]
+
+        end subroutine fytest_initFixture
+      #:endif
+
+
+      #:if FIXTURE.get("final") is not None
+        subroutine fytest_finalFixture(fytest_context)
+          type(fytest_TestContext), intent(inout) :: fytest_context
+
+          $:FIXTURE["final"]
+
+        end subroutine fytest_finalFixture
+      #:endif
+
+
+      #:for TEST_NAME in FIXTURE["tests"]
+
+        subroutine fytest_runTest_${TEST_NAME}$(fytest_context)
+          type(fytest_TestContext), intent(inout) :: fytest_context
+
+          ${fytest_tests[TEST_NAME]["implementation"]}$
+
+        end subroutine fytest_runTest_${TEST_NAME}$
+
+      #:endfor
+
+    end subroutine fytest_runFixturedTest_${FIXTURE_NAME}$
+
+  #:endfor
+
+end module fytest_suite_${NAME}$
+
+
+#:enddef fytest_render_current_test_suite
+
+
+#! Renders test driver
+#!
+#:def fytest_render_test_driver()
+!
+! Test driver to drive all tests
+!
+program fytest_test_driver
+  use fytest
+
+  type(fytest_GlobalEnv) :: fytest_env
+
+  call fytest_GlobalEnv_init(fytest_env)
+  call fytest_runTestDriver(fytest_env)
+  call fytest_GlobalEnv_final(fytest_env)
+
+contains
+
+
+  subroutine fytest_runTestDriver(env)
+    #:for SUITE_NAME in fytest_suite_names
+      use fytest_suite_${SUITE_NAME}$, only : fytest_getSuiteContainer_${SUITE_NAME}$
+    #:endfor
+    implicit none
+
+    type(fytest_GlobalEnv), intent(inout) :: env
+
+    #:if fytest_with_mpi
+      character(*), parameter ::  fytest_test_driver_mode = 'mpi'
+    #:else
+      character(*), parameter :: fytest_test_driver_mode = 'serial'
+    #:endif
+
+    type(fytest_SuiteContainer), allocatable :: suiteContainers(:)
+    type(fytest_Suite), allocatable :: suites(:)
+    type(fytest_TestContainer), allocatable :: testContainers(:)
+    type(fytest_Timer) :: testTimer
+    type(fytest_TestLogger), allocatable :: logger
+    integer :: totals(fytest_nTestStatus)
+    logical :: hasErrors
+    character(100) :: errorStr
+
+    if (env%isMaster) then
+      allocate(logger)
+      call fytest_TestLogger_init(logger)
+    end if
+
+    if (fytest_lib_mode /= fytest_test_driver_mode) then
+      if (env%isMaster) then
+        write(errorStr, '(5A)')&
+            & "Test driver and test library have been compiled in different modes (",&
+            & trim(fytest_test_driver_mode), " vs. ", trim(fytest_lib_mode), ")"
+        call logger%writeError(trim(errorStr))
+      end if
+      call fytest_GlobalEnv_final(env)
+      error stop 1
+    end if
+
+    allocate(suiteContainers(${len(fytest_suite_names)}$))
+    #:for SUITE_IND, SUITE_NAME in enumerate(fytest_suite_names)
+      call fytest_getSuiteContainer_${SUITE_NAME}$(&
+          & suiteContainers(${SUITE_IND + 1}$))
+    #:endfor
+    call testTimer%start()
+    call fytest_initSuites(suiteContainers, logger)
+    call fytest_getSuites(suiteContainers, suites)
+    call fytest_getFlatTestArray(suites, testContainers)
+    call fytest_runTests(env, testContainers, logger)
+    call fytest_finalSuites(suiteContainers)
+    call testTimer%stop()
+    call fytest_generateFinalReport(suiteContainers, testContainers, testTimer, totals, hasErrors,&
+        & logger)
+
+    if (hasErrors) then
+      call fytest_GlobalEnv_final(env)
+      stop 1
+    end if
+
+  end subroutine fytest_runTestDriver
+
+end program fytest_test_driver
+#:enddef fytest_render_test_driver
+
+
+#! Renders the code for the ASSERT macro
+#!
+#! Args:
+#!     COND: Condition in the ASSERT macro.
+#!
+#:def fytest_render_assert(COND)
+  #:set condstr = COND.replace('"', '""')
+if (fytest_context%assertFailed((${COND}$), "${_FILE_}$", ${_LINE_}$,&
+    & "Failing condition: ${condstr}$")) then
+  return
+end if
+#:enddef
+
+
+#! Checks whether a name is valid (can be part of an identifier)
+#!
+#! Args:
+#!     NAME: Name to normalize
+#!
+#:def fytest_check_name_validity(NAME)
+  #:mute
+    #:if not NAME.replace('_', '').isalnum()
+      #:stop "Name '" + NAME + "' contains invalid characters"
+    #:endif
+  #:endmute
+#:enddef
+
+#:endmute

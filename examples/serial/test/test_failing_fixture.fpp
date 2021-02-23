@@ -58,11 +58,11 @@
     #! Tests can access the fixture scope
 
     #:block TEST('recursion_up')
-      @:ASSERT_EQ(factorial(curval) * (curval + 1), factorial(curval + 1))
+      @:ASSERT(factorial(curval) * (curval + 1) == factorial(curval + 1))
     #:endblock
 
     #:block TEST('recursion_down')
-      @:ASSERT_EQ(factorial(curval), curval * factorial(curval - 1))
+      @:ASSERT(factorial(curval) == curval * factorial(curval - 1))
     #:endblock
 
     #! We define a renderer to show the random number used in a given fixture

@@ -1,28 +1,34 @@
-#! Demonstrates the usage of parameterized test fixtures.
+#! Demonstrates a failing test suite initializer
 
 #:include 'fytest.fypp'
 
-#:block TEST_SUITE('parameterized')
+#:block TEST_SUITE('failing_suite')
   use mymath
   implicit none
 
 #:contains
 
-  #! We use the test suite initializer to initialize the seed
-  #! Note: This routine is called once before any tests are executed.
+  #! Using the test suite initializer to initialize suite.
+  #! Since it will fail, none of the tests in the suite will be run.
   #:block TEST_SUITE_INIT
     call random_seed()
+    @:ASSERT(.false.)
+    print *, "Error: this line should be never reached"
+    stop
   #:endblock
 
 
-  #! Parameterized test, iterator runs over the range from 1 to 10.
+  #:block TEST_SUITE_FINAL
+    print *, 'Error: This should be never reached, since init has failed'
+    stop
+  #:endblock
 
-  #:block TEST_FIXTURE('random', ITERATORS=[('iter', 10)], RENDERER='render')
 
-    #! Iterator variables must be declared in the fixture scope
-    integer :: iter
+  #! Testing for various special factorial values
 
-    #! Some other fixture variable
+  #:block TEST_FIXTURE('random', RENDERER='render')
+
+    #! Variables defined here can be accessed by each unit within the fixture
     integer :: curval
 
   #:contains
@@ -39,11 +45,11 @@
     #! Tests can access the fixture scope
 
     #:block TEST('recursion_up')
-      @:ASSERT_EQ(factorial(curval) * (curval + 1), factorial(curval + 1))
+      @:ASSERT(factorial(curval) * (curval + 1) == factorial(curval + 1))
     #:endblock
 
     #:block TEST('recursion_down')
-      @:ASSERT_EQ(factorial(curval), curval * factorial(curval - 1))
+      @:ASSERT(factorial(curval) == curval * factorial(curval - 1))
     #:endblock
 
     #! We define a renderer to show the random number used in a given fixture

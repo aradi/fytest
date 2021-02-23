@@ -1,8 +1,8 @@
 !> Contains trivial mathemtical routines for demonstration purposes.
 module mymath
   implicit none
-  private
 
+  private
   public :: factorial
 
 contains
