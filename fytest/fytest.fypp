@@ -366,6 +366,9 @@
 #! String to emit and collect for registered tests
 #:set fytest_test_case_marker = '\n#:_FYTEST_REGISTERED_TEST_\n'
 
+#! Test case enumerator
+#:set fytest_test_enum = 0
+
 
 #! Turns on serial mode
 #:def fytest_set_serial_mode()
@@ -405,15 +408,13 @@
     #:global fytest_tests
     #:global fytest_test_names
     #:global fytest_fixtures
+    #:global fytest_test_enum
 
     $:fytest_check_name_validity(NAME)
-
-    #:if NAME in fytest_tests
-      #:stop "Test '" + NAME + "' has already been defined"
-    #:endif
-
-    $:fytest_test_names.append(NAME)
-    $:fytest_tests.update([(NAME, {"implementation": IMPLEMENTATION.strip()})])
+    #:set ENUM_NAME = fytest_enumerate_test_name(NAME, ".{:d}".format(fytest_test_enum))
+    #:set fytest_test_enum = fytest_test_enum + 1
+    $:fytest_test_names.append(ENUM_NAME)
+    $:fytest_tests.update([(ENUM_NAME, {"implementation": IMPLEMENTATION.strip()})])
 
   #:endmute
 #:enddef fytest_register_test_case
@@ -672,7 +673,7 @@ contains
         fixture%name = "${FIXTURE_NAME}$"
         allocate(fixture%tests(${len(FIXTURE["tests"])}$))
         #:for TEST_IND, TEST in enumerate(FIXTURE["tests"])
-          fixture%tests(${TEST_IND + 1}$)%str = "${TEST}$"
+          fixture%tests(${TEST_IND + 1}$)%str = "${fytest_denumerate_test_name(TEST)}$"
         #:endfor
         #:set FIXTURE_ITERATORS = FIXTURE.get("iterators")
         #:set FIXTURE_ITERATORS = [] if FIXTURE_ITERATORS is None else FIXTURE_ITERATORS
@@ -751,7 +752,15 @@ contains
 
         call testContext%setPhase(fytest_TestPhases%test)
         select case (testname)
-        #:for TEST_NAME in FIXTURE["tests"]
+        #:set test_names = set()
+        #:for ENUM_TEST_NAME in FIXTURE["tests"]
+          #:set TEST_NAME = fytest_denumerate_test_name(ENUM_TEST_NAME)
+          #:if TEST_NAME in test_names
+            #:stop "Duplicate test name '{}' in fixture '{}'".format(TEST_NAME, FIXTURE_NAME)
+          #:endif
+          #:mute
+            $:test_names.add(TEST_NAME)
+          #:endmute
           case ("${TEST_NAME}$")
             call fytest_runTest_${TEST_NAME}$(testContext)
         #:endfor
@@ -791,12 +800,13 @@ contains
       #:endif
 
 
-      #:for TEST_NAME in FIXTURE["tests"]
+      #:for ENUM_TEST_NAME in FIXTURE["tests"]
+        #:set TEST_NAME = fytest_denumerate_test_name(ENUM_TEST_NAME)
 
         subroutine fytest_runTest_${TEST_NAME}$(fytest_context)
           type(fytest_TestContext), intent(inout) :: fytest_context
 
-          ${fytest_tests[TEST_NAME]["implementation"]}$
+          ${fytest_tests[ENUM_TEST_NAME]["implementation"]}$
 
         end subroutine fytest_runTest_${TEST_NAME}$
 
@@ -923,3 +933,24 @@ end if
 #:enddef
 
 #:endmute
+
+
+#! Adds an enumerator to a test
+#!
+#! Args:
+#!   TEST_NAME: Name of the test
+#!   ENUM: Enumerator (string representation of a positiv decimal)
+#!
+#:def fytest_enumerate_test_name(TEST_NAME, ENUM)
+  $:TEST_NAME + "." + ENUM
+#:enddef
+
+
+#! Removes the enumerator from a test name
+#!
+#! Args:
+#!   ENUM_TEST_NAME: Enumerated test name
+#!
+#:def fytest_denumerate_test_name(ENUM_TEST_NAME)
+  $:ENUM_TEST_NAME.split(".", 1)[0]
+#:enddef
