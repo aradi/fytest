@@ -17,7 +17,7 @@ set(FYTEST_FYPP_FLAGS "${FYTEST_FYPP_FLAGS}" PARENT_SCOPE)
 function(fypp_preprocess preprocopts oldfiles newfiles)
   set(_newfiles)
   foreach(oldfile IN LISTS oldfiles)
-    string(REGEX REPLACE "\\.fpp" ".f90" newfile ${oldfile})
+    set(newfile "${oldfile}.f90")
     add_custom_command(
       OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${newfile}
       COMMAND ${FYPP} ${preprocopts} ${CMAKE_CURRENT_SOURCE_DIR}/${oldfile} ${CMAKE_CURRENT_BINARY_DIR}/${newfile}
