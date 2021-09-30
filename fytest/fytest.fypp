@@ -446,6 +446,14 @@
     #:global fytest_current_fixture
     #:global fytest_test_names
 
+    #:if not IMPLEMENTATION.strip()
+      #:stop "Test fixture '{}' without implementation (probably due to missing '#:contains')".format(NAME)
+    #:endif
+
+    #:if SPECIFICATION.count(fytest_test_case_marker)
+      #:stop "Tests found in the specification of test fixture {}".format(NAME)
+    #:endif
+
     #:set nr_tests_in_fixture = IMPLEMENTATION.count(fytest_test_case_marker)
     #:set IMPLEMENTATION = IMPLEMENTATION.replace(fytest_test_case_marker, '')
 
@@ -517,6 +525,14 @@
     #:global fytest_current_suite
     #:global fytest_fixtures
     #:global fytest_test_names
+
+    #:if not IMPLEMENTATION.strip()
+      #:stop "Test suite '{}' without implementation (probably due to missing '#:contains')".format(NAME)
+    #:endif
+
+    #:if SPECIFICATION.count(fytest_test_case_marker)
+      #:stop "tests found in the specification of test suite ${NAME}$"
+    #:endif
 
     #:set nr_tests_without_fixture = IMPLEMENTATION.count(fytest_test_case_marker)
     #:set IMPLEMENTATION = IMPLEMENTATION.replace(fytest_test_case_marker, '')
