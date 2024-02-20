@@ -3,7 +3,7 @@ FyTest — Instant Fortran unit testing
 *************************************
 
 **Note:** FyTest is deprecated and will not be developed further. You may
-consider to use the `Fortuno <https://github.com/aradi/fortuno>`_ unit testing
+consider to use the `Fortuno <https://github.com/fortuno-repos/fortuno>`_ unit testing
 system instead, which offers similar functionality but in a more robust
 and more user-friendly framework.
 
